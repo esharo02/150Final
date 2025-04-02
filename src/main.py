@@ -24,7 +24,6 @@ def main():
 
     if MODE == "select" and FILE:
         print(f"Processing selected file: {FILE}")
-        1
         
     elif MODE == "input" and FILE:
         print(f"Processing input file: {FILE}")
