@@ -8,20 +8,22 @@ def get_chords(mxl_file):
     c = c.chordify() # this is unfair
     chords = []
     for element in c.flatten().notes:
-        if isinstance(element, chord.Chord):
+        if isinstance(element, chord.Chord) and len(element.notes) > 1:
             chords.append((element, element.offset))
-    chordsymbols = []
-    for element in c.flatten().notes:
-        if isinstance(element, harmony.ChordSymbol):
-            chords.append((element, element.offset))
-    return chords, chordsymbols
 
-chords, chordsymbols = get_chords('All_Of_Me__Key_of_C.mxl')
+    
+    return chords
+
+
+
+
+chords = get_chords('../leads/All_Of_Me__Key_of_C.mxl')
 print(chords)
-print(chordsymbols)
+
+chords = get_chords('../leads/There_Will_Never_Be_Another_You.mxl')
+print(chords)
+
+chords = get_chords('../leads/TRB_Autumn_Leaves.mxl')
+print(chords)
 
 
-# print version of music21
-import music21
-print(music21.__version__)
-# 9.3.0
