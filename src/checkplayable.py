@@ -38,20 +38,22 @@ def get_chords(mxl_file):
     if len(repeatBars) > 0 and repeatBars[0]['el'].direction == "end": # handle the case where there's no begin repeat
         repeatBars.insert(0, {"el": bar.Repeat(direction="start", measureNumber=1), "offset": 0})
 
-    chords, melody = [], []
+    chords = []
+    melody = []
     for element in c.flatten():
         if isinstance(element, harmony.ChordSymbol):
             chords.append({"el": element, "offset": element.offset})
-        if isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
+        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
+            element.lyric = None
             melody.append({"el": element, "offset": element.offset})
-            
-    print(repeatBars)
+    
+    #print(repeatBars)
     totalLength = 0
     curStart = 0
     for i in range(0, len(repeatBars), 2):
         # print(f"In for loop {i} {repeatBars[i]['el'].measureNumber} {repeatBars[i + 1]['el'].measureNumber}")
         repeatChords, repeatMelody = [], []
-        print(c)
+        # print(c)
         repeatSection = copy.deepcopy(c.measures(repeatBars[i]['el'].measureNumber, repeatBars[i + 1]['el'].measureNumber))
         # repeatSection.show('text')
         curStart += repeatBars[i]['offset']
@@ -62,7 +64,7 @@ def get_chords(mxl_file):
             #print(f"I am here and appending this {element} at {element.offset + curStart}")
             if isinstance(element, harmony.ChordSymbol):
                 repeatChords.append({"el": element, "offset": element.offset + curStart})
-            if isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
+            elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
                 repeatMelody.append({"el": element, "offset": element.offset + curStart})
         
         # A [repeat] B
@@ -77,7 +79,8 @@ def get_chords(mxl_file):
         
         curStart += repeatSection.quarterLength
         # print(f"repeat length: {repeatSection.quarterLength}")
-        chords, melody = chords + repeatChords, melody + repeatMelody
+        chords = chords + repeatChords
+        melody = melody + repeatMelody
         totalLength += repeatSection.quarterLength
     chords.sort(key=lambda x: x["offset"])
     melody.sort(key=lambda x: x["offset"])
@@ -126,7 +129,7 @@ def get_chords(mxl_file):
 
 # chords, melody, len = get_chords('../leads/All_Of_Me__Key_of_C.mxl')
 # chords, melody, len = get_chords('../leads/autumn.mxl') # 
-chords, melody, length = get_chords('../leads/There_Will_Never_Be_Another_You.mxl')
+chords, melody, length = get_chords('../leads/Caravan.musicxml')
 #print(chords)
 #print(melody)
 #for c in chords:
@@ -135,8 +138,11 @@ chords, melody, length = get_chords('../leads/There_Will_Never_Be_Another_You.mx
 
 # convert melody array back into music21 stream
 melodyStream = stream.Stream()
-for note in melody:
-    melodyStream.append(note["el"])
+for n in melody:
+    melodyStream.append(n["el"])
+
+#print(melody)
+#print(chords)
     
 if sys.argv[1] == "--fuckoff":
     melodyStream.show()
