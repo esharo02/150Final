@@ -38,6 +38,9 @@ def get_chords(mxl_file):
     if len(repeatBars) > 0 and repeatBars[0]['el'].direction == "end": # handle the case where there's no begin repeat
         repeatBars.insert(0, {"el": bar.Repeat(direction="start", measureNumber=1), "offset": 0})
 
+    if len(repeatBars) == 2 and repeatBars[0]['el'].measureNumber == 1 and repeatBars[1]['offset'] == -1:
+        repeatBars = []
+
     chords = []
     melody = []
     for element in c.flatten():
