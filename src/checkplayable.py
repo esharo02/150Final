@@ -47,7 +47,8 @@ def get_chords(mxl_file):
             element.lyric = None
             melody.append({"el": element, "offset": element.offset})
     
-    #print(repeatBars)
+    # print((repeatBars))
+    
     totalLength = 0
     curStart = 0
     for i in range(0, len(repeatBars), 2):

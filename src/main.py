@@ -33,7 +33,10 @@ SCALES_FOR_CHORDS = {
     "maj7#11": [0, 2, 4, 6, 7, 9, 11],
 }
 
-def chordSymbolToQuality(s):
+# Em7 alter b5
+# Am7 alter b5
+
+def chordSymbolToQuality(s): # this removes the root and returns the quality of the chord
     match = re.search(r'[^A-Z]', s)
     if match:
         str = s[match.start():]
@@ -58,14 +61,33 @@ def main():
 
     FILE = args.file
 
-    chords, melody, length = get_chords(FILE)
-    pieceLength = length * 5 # HEAD, BASS SOLO, PIANO SOLO, HORN SOLO, HEAD
 
-    #TODO test with more leads to cover more chord types
-    for c in chords:
-        if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
-            print(c["el"].figure)
+    directory_path = "../leads"
+    directory = [os.path.join(directory_path, file) for file in os.listdir(directory_path) if file.endswith((".mxl", ".musicxml"))]
+
+
+    # dont inlcude beautifullove.mxl, it has multiple endings 
+    # dont include OntheSunnySideOfTheStreet_II.musicxml, it has weird repeats
+    # dont include StickyJuly.mxl, it has a repeat without a start repeat barline --- i thought we had a case for this...
+    # dont include SummerSamba, it has multiple endings
+    # dont inlcude theZone, there is a repeat without a start repeat barline
+    directory = [file for file in directory if "beautiful" not in file.lower() if "ii" not in file.lower() if "july" not in file.lower() if "samba" not in file.lower() if "zone" not in file.lower()]
+    # directory = ["../leads/OnTheSunnySideOfTheStreet_II.musicxml"] # for testing
+    for file in directory:
+        print("Song: ", file)
+        # chords, melody, length = get_chords(FILE)
+        chords, melody, length = get_chords(file)
+        pieceLength = length * 5 # HEAD, BASS SOLO, PIANO SOLO, HORN SOLO, HEAD
+
+        #TODO test with more leads to cover more chord types
+
         
+
+        for c in chords:
+            if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
+                print(c["el"].figure)
+                print(chordSymbolToQuality(c["el"].figure))
+            
     exit()
 
     theScore = stream.Score()
@@ -161,6 +183,7 @@ def getBassPart(chords, melody, length):
     return bassPart
 
 import random
+import os
 
 # weighted_choices = {
     
