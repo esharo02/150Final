@@ -187,7 +187,7 @@ def main():
     # dont include SummerSamba, it has multiple endings
     # dont inlcude theZone, there is a repeat without a start repeat barline
     # directory = [file for file in directory if "beautiful" not in file.lower() if "ii" not in file.lower() if "july" not in file.lower() if "samba" not in file.lower() if "zone" not in file.lower()]
-    directory = ["../leads/Caravan.musicxml"] # for testing
+    directory = ["../leads/SatinDoll.musicxml"] # for testing
     for f in directory:
         print("Song: ", f)
         # chords, melody, length = get_chords(FILE)
@@ -241,18 +241,25 @@ def main():
     theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
     theScore.show()
+    # theScore.show('text')
+    # theScore.parts[0].measures(0, 5).show('midi')
 
-def swingify(s):
-    # TODO swingify doesn't work in some cases (Caravan)
-    notesAndRests = list(s.recurse().notesAndRests)
+from fractions import Fraction
+def swingify(instream):
+    # TODO swingify doesn't work in some cases (Caravan)y
+    # NOTE this doesn't work on Caravan, but Caravan should swing quarter notes anyway. Maybe toss it? @all
+    # NOTE we should only do this when we're outputting to MIDI -- otherwise, we should just slap on a Swing marking on the sheet music
+    s = instream.flatten()
+    notesAndRests = list(s.notesAndRests)
+    notesAndRests = [elem for elem in notesAndRests if isinstance(elem, note.Note) or isinstance(elem, note.Rest)]
     for i, elem in enumerate(notesAndRests):
         if elem.duration.quarterLength < 0.5:
             continue
         if elem.offset % 1 == 0.5:
-            elem.offset = elem.offset + 1/6
-            elem.duration.quarterLength -= 1/6
-            notesAndRests[i-1].quarterLength += 1/6
-
+            elem.offset = elem.offset + Fraction(1, 6)
+            elem.duration.quarterLength -= Fraction(1, 6)
+            notesAndRests[i-1].duration.quarterLength += Fraction(1, 6)
+            
     return s
 
 def getHornPart(chords, melody, length, swung):
