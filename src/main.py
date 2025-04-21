@@ -5,6 +5,7 @@ import copy
 import re
 import random
 from fractions import Fraction
+from solo import *
 
 #https://igm.rit.edu/~jabics/BilesICMC94.pdf
 NOTES_FOR_CHORDS = {
@@ -108,10 +109,14 @@ def makeMarkovChain(chord, scale):
             if choice not in chord and prev in chord:
                 buckets[i] += 1
             if choice == prev:
-                buckets[(i - 1) % len(scale)] += 1 # the note before it has additional chance of being selected
+                if i != 0:
+                    buckets[(i - 1)] += 1 # the note before it has additional chance of being selected
                 buckets[i] == 0
-                buckets[(i + 1) % len(scale)] += 1 # the note after it has additional chance of being selected
+                if i != len(scale) - 1:
+                    buckets[(i + 1)] += 1 # the note after it has additional chance of being selected
+        buckets[scale.index(prev)] == 0
         bucketrates = [0.95 * i / sum(buckets) for i in buckets]
+        
        
        
         for i, choice in enumerate(scale):
@@ -137,7 +142,6 @@ def makeMarkovChain(chord, scale):
     #         print()
     
     # # prettyPrintMarkov(mc)
-    assert([sum(mc[row]) == 1 for row in mc.keys()])
     return mc
 
 MARKOVS = {k: makeMarkovChain(NOTES_FOR_CHORDS[k], SCALES_FOR_CHORDS[k]) for k in SCALES_FOR_CHORDS.keys()}
@@ -168,7 +172,7 @@ def main():
 
 
     args = argparser.parse_args()
-    mode = args.mode == "-m"
+    midi = args.mode == "-m"
     FILE = args.file
 
     # to access probabilities, markovs["chordquality"]["prev"]["next"]
@@ -206,7 +210,6 @@ def main():
     #         if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
     #             print(chordSymbolToQuality(c["el"].figure))
             
-    midi = args.mode == "-m"
     theScore = stream.Score()
 
     # build piano accompaniment
@@ -374,7 +377,7 @@ def getHornPart(chords, melody, length, t, swung, midi):
         hornPart.append(note.Rest(quarterlength=((length * 2) % 1))) # add remainder 
 
     #Horn solo
-    hornPart.append(transposeSolo(getSolo(chords, length), "horn"))
+    hornPart.append(transposeSolo(getSolo(chords, melody, length, "horn"), "horn"))
 
     for n in melody:
         hornPart.insert(n["offset"] + length * 4, copy.deepcopy(n["el"]))
@@ -417,7 +420,7 @@ def getBassPart(chords, melody, length, t, swung):
     bassPart.append(bassPattern)
 
     # Bass solo
-    bassPart.append(transposeSolo(getSolo(chords, length), "bass"))
+    bassPart.append(transposeSolo(getSolo(chords, melody, length, "bass"), "bass"))
 
     #TODO Need to change if we decide that bass pattern should be
     # different for each time through the form
@@ -445,23 +448,64 @@ def getBassPattern(chords, length):
     bassPattern = []
     chordIndex = -1
     curChain = {}
+    chordNotes = []
     for offset in range(int(length)):
         if chordIndex == -1 or (chordIndex != len(chords) - 1 and chords[chordIndex + 1]["offset"] <= offset): # choose a new chord now
             chordIndex += 1
             quality = chordSymbolToQuality(chords[chordIndex]["el"].figure)
             curRoot = chords[chordIndex]['el'].root().midi
             curChain = MARKOVS[quality]
+            chordNotes = NOTES_FOR_CHORDS[quality]
             # pick a note from root, 3rd if present, or 5th if present
-            choices = [i for i in list(set([0, 3, 4, 7]).intersection(NOTES_FOR_CHORDS[quality]))]
-            bassPattern.append(note.Note(random.choice(choices) + curRoot - 12))
+            choices = [i for i in list(set([0, 3, 4, 7]).intersection(chordNotes))]
+            n = note.Note(random.choice(choices) + curRoot - 12)
         else:  
             row = curChain[(bassPattern[-1].pitch.midi - curRoot) % 12]
             # print(row.keys())
             # print(type(row.keys()))
-            bassPattern.append(note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12))
+            n = note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12)
                 
+
+        shuffledChordNotes = random.sample(chordNotes, len(chordNotes))
+        # print("Root:", note.Note(curRoot - 12).pitch)
+        # print("Chord quality:", quality)
+        # print("Chord notes:", [note.Note(c + curRoot - 12).pitch.name for c in shuffledChordNotes])
+        # print("Chord notes:", [c for c in shuffledChordNotes])
+        # print("Chosen note:", n.pitch)
+        # print("Chosen note midi:", (n.pitch.midi - curRoot) % 12)
         
-        
+        resolveNote = None
+        r = random.random()
+        if r < 0.4 and (n.pitch.midi - curRoot) % 12 not in chordNotes: 
+            # print("Spicy note found, resolving to a chord tone")
+            for i in shuffledChordNotes:
+                # print("Testing", i, "against", (n.pitch.midi - curRoot) % 12, ". Result: ", abs(((n.pitch.midi - curRoot) % 12) - i))
+                if abs(((n.pitch.midi - curRoot) % 12) - i) == 1:
+                    resolveNote = note.Note(i + curRoot - 12)
+                    # print("Spicy note found one half step away, resolving to:", resolveNote.pitch)
+                    break
+                    
+            if resolveNote is None:
+                for i in shuffledChordNotes:
+                    # print("Testing", i, "against", (n.pitch.midi - curRoot) % 12, ". Result: ", abs(((n.pitch.midi - curRoot) % 12) - i))
+                    if abs(((n.pitch.midi - curRoot) % 12) - i) == 2:
+                        resolveNote = note.Note(i + curRoot - 12)
+                        # print("Spicy note found one whole step away, resolving to:", resolveNote.pitch)
+                        break
+
+        if resolveNote is not None:
+            n.duration.quarterLength = 0.5
+            bassPattern[-1].quarterLength = 0.5
+                
+        # print("Adding note:", n.pitch)
+        bassPattern.append(n)
+
+        if resolveNote is not None:
+            # print("Adding note:", resolveNote.pitch)
+            bassPattern.append(resolveNote)
+
+    # for b in bassPattern:
+    #     print(b, b.quarterLength)
         # random choice btwn each note
         
 
@@ -488,7 +532,7 @@ def getPianoPart(chords, melody, length, t, swung):
         pianoPart.append(copy.deepcopy(n))
 
     # Piano solo
-    pianoPart.append(transposeSolo(getSolo(chords, length), "piano"))
+    pianoPart.append(transposeSolo(getSolo(chords, melody, length, "piano"), "piano"))
 
     # Horn solo, Head
     for _ in range(2):
@@ -506,20 +550,7 @@ def getPianoPart(chords, melody, length, t, swung):
 
 
 ## from comp2.py
-# def getRhythms(length): # just doing this for 1 section
-#     compositionQuarterLength = length
-#     currentLength = 0
-#     rhythms = []
-#     while currentLength != compositionQuarterLength:
-#         curr = random.choices(LENGTH_OPTIONS, weights=LENGTH_WEIGHTS, k=1)[0]
-#         # curr = random.choice(LENGTH_OPTIONS)
-#         if curr <= compositionQuarterLength - currentLength and \
-#             (len(rhythms) < 2 or rhythms[-1] != curr or rhythms[-1] != rhythms[-2] or currentLength == compositionQuarterLength - 0.5):
-#                 rhythms.append(curr)
-#                 currentLength += curr
-#     return rhythms
-
-def getRhythms(length): # just doing this for 1 section
+def getRhythms(length): # 
     compositionQuarterLength = length
     currentLength = 0
     rhythms = []
@@ -672,18 +703,6 @@ def getPianoPattern(chords, length):
 
     return pianoPattern
 
-
-
-def getSolo(chords, length):
-    solo = []
-    for _ in range(int(length)):
-        solo.append(note.Rest())
-    if length % 1 != 0:
-        solo.append(note.Rest(quarterlength=length % 1))
-    return solo
-
-def transposeSolo(solo, instrument):
-    return solo
 
 if __name__ == "__main__":
     main()
