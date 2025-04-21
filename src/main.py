@@ -246,7 +246,7 @@ def main():
 
     #theScore.append(getChordPart(chords, length, args.swing))
     t = tempo.MetronomeMark(number=t.getQuarterBPM(), referent="quarter") if t else None
-    hornPart = getHornPart(chords, melody, length, t, args.swing, midi=True)
+    hornPart = getHornPart(chords, melody, length, t, args.swing, midi=False)
     bassPart = getBassPart(chords, melody, length, t, args.swing)
     while hornPart.highestOffset < bassPart.highestOffset:
         hornPart.append(note.Rest())
@@ -254,7 +254,7 @@ def main():
     hornPart.makeMeasures(inPlace=True)
     theScore.append(hornPart)
     theScore.append(bassPart)
-    theScore.append(getPianoPart(chords, melody, length, t, args.swing))
+    #theScore.append(getPianoPart(chords, melody, length, t, args.swing))
     #theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
     theScore.show()
@@ -471,7 +471,7 @@ def getBassPattern(chords, length):
 
     return bassPattern
 
-def getPianoPart(chords, melody, length):
+def getPianoPart(chords, melody, length, t, swung):
     pianoPart = stream.Part()
     pianoPart.append(instrument.Piano())
 
