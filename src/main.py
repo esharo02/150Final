@@ -168,7 +168,7 @@ def main():
 
 
     args = argparser.parse_args()
-    mode = args.mode == "-m"
+    midi = args.mode == "-m"
     FILE = args.file
 
     # to access probabilities, markovs["chordquality"]["prev"]["next"]
@@ -205,7 +205,6 @@ def main():
     #         if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
     #             print(chordSymbolToQuality(c["el"].figure))
             
-    midi = args.mode == "-m"
     theScore = stream.Score()
 
     # build piano accompaniment
