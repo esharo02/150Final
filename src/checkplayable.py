@@ -69,7 +69,7 @@ def get_chords(mxl_file):
     for element in c.flatten():
         if isinstance(element, harmony.ChordSymbol):
             chords.append({"el": element, "offset": element.offset})
-        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
+        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord) or isinstance(element, harmony.ChordSymbol):
             element.lyric = None
             melody.append({"el": element, "offset": element.offset})
     
