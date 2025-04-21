@@ -148,8 +148,9 @@ def get_chords(mxl_file):
 
     melody = newMelody
 
-    # print(melody)
-    # exit()
+    for c in chords:
+        if c["offset"] % 1 == 0.25 or c["offset"] % 1 == 0.75:
+            c["offset"] = round(c["offset"])
 
     #only take lead sheets, dw abt this       
     # if len(chords) == 0:
