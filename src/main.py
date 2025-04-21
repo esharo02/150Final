@@ -254,13 +254,14 @@ def main():
     hornPart.makeMeasures(inPlace=True)
     theScore.append(hornPart)
     theScore.append(bassPart)
-    #theScore.append(getPianoPart(chords, melody, length, t, args.swing))
+    theScore.append(getPianoPart(chords, melody, length, t, args.swing))
     #theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
-    # theScore.show()
-    theScore.show('midi')
+    theScore.show()
+    # theScore.show('midi')
     # theScore.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
-    # theScore.parts[0].measures(0, 5).show('midi')
+    # theScore.parts[0].measures(0, 5).show()
+
 
 def swingify(instream, instrument):
     t = instream.getElementsByClass(tempo.MetronomeMark)
@@ -351,18 +352,6 @@ def swingify(instream, instrument):
     # print("Current Build:")
     # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     return newPart
-
-def getChordPart(chords, length, swung):
-    chordPart = stream.Part()
-    chordPart.append(instrument.Piano())
-    for i in range(5):
-        for c in chords:
-            chordPart.insert(c["offset"] + length * i, copy.deepcopy(c["el"]))
-    
-    chordPart = chordPart if not swung else swingifyChords(chordPart)
-    chordPart.makeMeasures(inPlace=True)
-
-    return chordPart
 
 def getHornPart(chords, melody, length, t, swung, midi):
     hornPart = stream.Part()
@@ -486,7 +475,7 @@ def getPianoPart(chords, melody, length):
     pianoPart = stream.Part()
     pianoPart.append(instrument.Piano())
 
-    pianoPattern = getPianoPattern()
+    pianoPattern = getPianoPattern(chords, length)
 
     # Head
     pianoPart.append(pianoPattern)
@@ -505,8 +494,106 @@ def getPianoPart(chords, melody, length):
 
     return pianoPart
 
-def getPianoPattern():
-    pass
+
+
+## from comp2.py
+def getRhythms(length): # just doing this for 1 section
+    compositionQuarterLength = length
+    currentLength = 0
+    rhythms = []
+    while currentLength != compositionQuarterLength:
+        curr = random.choices(LENGTH_OPTIONS, weights=LENGTH_WEIGHTS, k=1)[0]
+        # curr = random.choice(LENGTH_OPTIONS)
+        if curr <= compositionQuarterLength - currentLength and \
+            (len(rhythms) < 2 or rhythms[-1] != curr or rhythms[-1] != rhythms[-2] or currentLength == compositionQuarterLength - 0.5):
+                rhythms.append(curr)
+                currentLength += curr
+    return rhythms
+
+# LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3, 4] # TODO add more options for length of notes
+LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5] # TODO add more options for length of notes
+LENGTH_WEIGHTS = [0.3, 0.25, 0.2, 0.15, 0.1] # TODO add more options for length of notes
+MONTE_REST_PROBABILITY = 0.8 # probability of adding a rest, higher for accomp
+
+## from comp2.py
+def mapRhythms(notes, rhythms): # notes will actually be note objects
+    comp = stream.Part()
+    # comp.append(key.KeySignature(KEY_SIGNAURE))
+    currentOffset = 0
+    addRest = False
+    for i, (n, rhythm) in enumerate(zip(notes, rhythms)):
+        addRest = random.random() <= MONTE_REST_PROBABILITY and len(rhythms) > 1 and i < len(notes) - 1 and rhythm < 2 and not addRest
+        if currentOffset + rhythm > 4:
+
+            # curr1 = roman.RomanNumeral(n.figure, KEY) if not addRest else note.Rest()
+            # curr2 = roman.RomanNumeral(n.figure, KEY) if not addRest else note.Rest()
+            curr1 = copy.deepcopy(n) if not addRest else note.Rest()  
+            curr2 = copy.deepcopy(n) if not addRest else note.Rest()
+            curr1.duration.quarterLength = 4 - currentOffset
+            curr2.duration.quarterLength = rhythm - 4 + currentOffset
+            if not addRest:
+                curr1.tie = tie.Tie("start")
+                curr2.tie = tie.Tie("stop")
+            comp.append([curr1, curr2])
+        else:
+            if addRest: n = note.Rest()  
+            n.duration.quarterLength = rhythm
+            comp.append(n)
+        currentOffset += rhythm
+        currentOffset %= 4
+    return comp
+
+def getPianoPattern(chords, length):
+    
+    chordIndex = -1
+    pianoNotes = []
+    pianoPattern = []
+    # pianoPart = stream.Part()
+    # pianoPart.append(clef.BassClef())
+    # pianoPart.append(instrument.Piano())
+
+
+    ## from basspattern. 
+    # We need to change this to not choose individual notes, from a markov chain
+    # Instead, we will generate some rhythms and choose them usijng monte carlo :)
+    for offset in range(int(length)):
+        if chordIndex == -1 or (chordIndex != len(chords) - 1 and chords[chordIndex + 1]["offset"] <= offset): # choose a new chord now
+            chordIndex += 1
+            quality = chordSymbolToQuality(chords[chordIndex]["el"].figure)
+            curRoot = chords[chordIndex]['el'].root().midi
+            curChain = MARKOVS[quality]
+            # pick a note from root, 3rd if present, or 5th if present
+            choices = [i for i in list(set([0, 3, 4, 7]).intersection(NOTES_FOR_CHORDS[quality]))]
+            pianoNotes.append(note.Note(random.choice(choices) + curRoot - 12))
+        else:  
+            row = curChain[(pianoNotes[-1].pitch.midi - curRoot) % 12]
+            # print(row.keys())
+            # print(type(row.keys()))
+            pianoNotes.append(note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12))
+    
+    # print(pianoNotes)
+
+    
+    rhythms = getRhythms(length)
+
+    
+    mapping = mapRhythms(pianoNotes, rhythms)
+
+    ##TODO ensure these notes actually match with the chords using this mapping strategy
+
+    for el in mapping:
+        pianoPattern.append(copy.deepcopy(el))
+
+    # pianoPattern.makeMeasures(inPlace=True)
+
+    for el in pianoPattern:
+        if isinstance(el, note.Note):
+            el.octave += 3  # Move notes up two octaves for treble range
+        elif isinstance(el, chord.Chord):
+            el.transpose(+36, inPlace=True)  # Transpose chords up two octaves
+    return pianoPattern
+
+
 
 def getSolo(chords, length):
     solo = []
