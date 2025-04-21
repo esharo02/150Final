@@ -437,23 +437,64 @@ def getBassPattern(chords, length):
     bassPattern = []
     chordIndex = -1
     curChain = {}
+    chordNotes = []
     for offset in range(int(length)):
         if chordIndex == -1 or (chordIndex != len(chords) - 1 and chords[chordIndex + 1]["offset"] <= offset): # choose a new chord now
             chordIndex += 1
             quality = chordSymbolToQuality(chords[chordIndex]["el"].figure)
             curRoot = chords[chordIndex]['el'].root().midi
             curChain = MARKOVS[quality]
+            chordNotes = NOTES_FOR_CHORDS[quality]
             # pick a note from root, 3rd if present, or 5th if present
-            choices = [i for i in list(set([0, 3, 4, 7]).intersection(NOTES_FOR_CHORDS[quality]))]
-            bassPattern.append(note.Note(random.choice(choices) + curRoot - 12))
+            choices = [i for i in list(set([0, 3, 4, 7]).intersection(chordNotes))]
+            n = note.Note(random.choice(choices) + curRoot - 12)
         else:  
             row = curChain[(bassPattern[-1].pitch.midi - curRoot) % 12]
             # print(row.keys())
             # print(type(row.keys()))
-            bassPattern.append(note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12))
+            n = note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12)
                 
+
+        shuffledChordNotes = random.sample(chordNotes, len(chordNotes))
+        # print("Root:", note.Note(curRoot - 12).pitch)
+        # print("Chord quality:", quality)
+        # print("Chord notes:", [note.Note(c + curRoot - 12).pitch.name for c in shuffledChordNotes])
+        # print("Chord notes:", [c for c in shuffledChordNotes])
+        # print("Chosen note:", n.pitch)
+        # print("Chosen note midi:", (n.pitch.midi - curRoot) % 12)
         
-        
+        resolveNote = None
+        r = random.random()
+        if r < 0.4 and (n.pitch.midi - curRoot) % 12 not in chordNotes: 
+            # print("Spicy note found, resolving to a chord tone")
+            for i in shuffledChordNotes:
+                # print("Testing", i, "against", (n.pitch.midi - curRoot) % 12, ". Result: ", abs(((n.pitch.midi - curRoot) % 12) - i))
+                if abs(((n.pitch.midi - curRoot) % 12) - i) == 1:
+                    resolveNote = note.Note(i + curRoot - 12)
+                    # print("Spicy note found one half step away, resolving to:", resolveNote.pitch)
+                    break
+                    
+            if resolveNote is None:
+                for i in shuffledChordNotes:
+                    # print("Testing", i, "against", (n.pitch.midi - curRoot) % 12, ". Result: ", abs(((n.pitch.midi - curRoot) % 12) - i))
+                    if abs(((n.pitch.midi - curRoot) % 12) - i) == 2:
+                        resolveNote = note.Note(i + curRoot - 12)
+                        # print("Spicy note found one whole step away, resolving to:", resolveNote.pitch)
+                        break
+
+        if resolveNote is not None:
+            n.duration.quarterLength = 0.5
+            bassPattern[-1].quarterLength = 0.5
+                
+        # print("Adding note:", n.pitch)
+        bassPattern.append(n)
+
+        if resolveNote is not None:
+            # print("Adding note:", resolveNote.pitch)
+            bassPattern.append(resolveNote)
+
+    # for b in bassPattern:
+    #     print(b, b.quarterLength)
         # random choice btwn each note
         
 
