@@ -1,7 +1,5 @@
 from music21 import *
-import os
 import copy
-import sys
 # get the chords, their offsets, and the entire length out of given mxl file
 #  {0.0} <music21.stream.Measure 0 offset=0.0>
 #         {0.0} <music21.layout.SystemLayout>
@@ -21,6 +19,8 @@ def get_chords(mxl_file):
     #s.show('text')
         # stre.append(part)
     tempo = c.metronomeMarkBoundaries()[0][2] if c.metronomeMarkBoundaries() else None
+    ts = s[meter.TimeSignature].first()
+    isFourFour = ts.numerator == 4 and ts.denominator == 4
     #print(f"Key: {key}, Tempo: {tempo}")
     # stre.show('text')
 
@@ -69,7 +69,7 @@ def get_chords(mxl_file):
     for element in c.flatten():
         if isinstance(element, harmony.ChordSymbol):
             chords.append({"el": element, "offset": element.offset})
-        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
+        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord) or isinstance(element, harmony.ChordSymbol):
             element.lyric = None
             melody.append({"el": element, "offset": element.offset})
     
@@ -148,8 +148,9 @@ def get_chords(mxl_file):
 
     melody = newMelody
 
-    # print(melody)
-    # exit()
+    for c in chords:
+        if c["offset"] % 1 == 0.25 or c["offset"] % 1 == 0.75:
+            c["offset"] = round(c["offset"])
 
     #only take lead sheets, dw abt this       
     # if len(chords) == 0:
@@ -186,7 +187,7 @@ def get_chords(mxl_file):
 #   Repeat barline at measure: 16, direction: end
 #   [1, 16]
     totalLength += s.quarterLength
-    return chords, melody, totalLength, tempo
+    return chords, melody, totalLength, tempo, isFourFour
 
 
 # chords, melody, len = get_chords('../leads/All_Of_Me__Key_of_C.mxl')
