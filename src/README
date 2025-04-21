@@ -1,0 +1,33 @@
+1. List the names and UTLNs of everyone in your final project group. Specifically call out the UTLN
+of the group member who submitted your code (so Richard can easily find it).
+
+esharo02 jmille36 gedwar01
+
+2. Clear instructions on how to run your submitted code. These instructions must at least cover
+how to generate sheet music and, separately, how to generate a midi. If you had to install any
+new libraries to get your code to work, those libraries should also be listed here with instructions of how to install them. If Richard cannot install these libraries, he can’t run and grade your
+code; it’s in your best interest to check that Richard can install these libraries well before the
+submission deadline.
+
+
+python .\main.py ../leads/{filename} -m : midi
+python .\main.py ../leads/{filename} -s : sheet music
+python .\main.py ../leads/{filename} --swing : swing
+
+3. A paragraph giving a high-level summary of your overall compositional approach.
+
+This program will produce midi/sheet music for a selection of jazz pieces, generating a sax melody, piano accompaniment, 
+and walking bassline. The piece will be structured with a HEAD section, followed by a separate solo from each instrument, and a concluding HEAD section. 
+
+In order to create a solo for a given instrument, a genetic algorithm is used,
+    @justin
+    - scoring functions
+    - similarity vs correctness
+    - mutations
+    - diff for each instrument?
+
+
+4. (Optional) any additional interesting details you’d like to share about your approach or how you
+implemented it.
+
+Hip; Hip; Horray!
