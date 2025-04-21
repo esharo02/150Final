@@ -237,12 +237,12 @@ def main():
     #     print('Error: Invalid mode. Mode must be "select" or "input".')
 
 
-    # theScore.append(getHornPart(chords, melody, length, args.swing))
-    # theScore.append(getBassPart(chords, melody, length, args.swing))
+    theScore.append(getHornPart(chords, melody, length, args.swing))
+    theScore.append(getBassPart(chords, melody, length, args.swing))
     theScore.append(getPianoPart(chords, melody, length))
     theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
-    # theScore.show()
+    theScore.show()
     # theScore.show('text')
     # theScore.parts[0].measures(0, 5).show()
 
@@ -404,14 +404,17 @@ def getRhythms(length): # just doing this for 1 section
     currentLength = 0
     rhythms = []
     while currentLength != compositionQuarterLength:
-        curr = random.choice(LENGTH_OPTIONS)
+        curr = random.choices(LENGTH_OPTIONS, weights=LENGTH_WEIGHTS, k=1)[0]
+        # curr = random.choice(LENGTH_OPTIONS)
         if curr <= compositionQuarterLength - currentLength and \
             (len(rhythms) < 2 or rhythms[-1] != curr or rhythms[-1] != rhythms[-2] or currentLength == compositionQuarterLength - 0.5):
                 rhythms.append(curr)
                 currentLength += curr
     return rhythms
 
-LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3, 4] # TODO add more options for length of notes
+# LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3, 4] # TODO add more options for length of notes
+LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5] # TODO add more options for length of notes
+LENGTH_WEIGHTS = [0.3, 0.25, 0.2, 0.15, 0.1] # TODO add more options for length of notes
 MONTE_REST_PROBABILITY = 0.8 # probability of adding a rest, higher for accomp
 
 ## from comp2.py
@@ -446,9 +449,10 @@ def getPianoPattern(chords, length):
     
     chordIndex = -1
     pianoNotes = []
-    pianoPart = stream.Part()
-    pianoPart.append(clef.BassClef())
-    pianoPart.append(instrument.Piano())
+    pianoPattern = []
+    # pianoPart = stream.Part()
+    # pianoPart.append(clef.BassClef())
+    # pianoPart.append(instrument.Piano())
 
 
     ## from basspattern. 
@@ -477,20 +481,19 @@ def getPianoPattern(chords, length):
     
     mapping = mapRhythms(pianoNotes, rhythms)
 
+    ##TODO ensure these notes actually match with the chords using this mapping strategy
+
     for el in mapping:
-        pianoPart.append(copy.deepcopy(el))
+        pianoPattern.append(copy.deepcopy(el))
 
-    pianoPart.makeMeasures(inPlace=True)
-    pianoPart.show()
-    # pianoPart.show('midi')
+    # pianoPattern.makeMeasures(inPlace=True)
 
-    # Adjust the piano part to be more suitable for accompaniment
-    # for el in pianoPart.recurse().notes:
-    #     if isinstance(el, note.Note):
-    #         el.octave += 2  # Move notes up two octaves for treble range
-    #     elif isinstance(el, chord.Chord):
-    #         el.transpose(+24, inPlace=True)  # Transpose chords up two octaves
-    return pianoPart
+    for el in pianoPattern:
+        if isinstance(el, note.Note):
+            el.octave += 3  # Move notes up two octaves for treble range
+        elif isinstance(el, chord.Chord):
+            el.transpose(+36, inPlace=True)  # Transpose chords up two octaves
+    return pianoPattern
 
 
 
