@@ -5,6 +5,7 @@ import copy
 import re
 import random
 from fractions import Fraction
+from solo import *
 
 #https://igm.rit.edu/~jabics/BilesICMC94.pdf
 NOTES_FOR_CHORDS = {
@@ -108,10 +109,14 @@ def makeMarkovChain(chord, scale):
             if choice not in chord and prev in chord:
                 buckets[i] += 1
             if choice == prev:
-                buckets[(i - 1) % len(scale)] += 1 # the note before it has additional chance of being selected
+                if i != 0:
+                    buckets[(i - 1)] += 1 # the note before it has additional chance of being selected
                 buckets[i] == 0
-                buckets[(i + 1) % len(scale)] += 1 # the note after it has additional chance of being selected
+                if i != len(scale) - 1:
+                    buckets[(i + 1)] += 1 # the note after it has additional chance of being selected
+        buckets[scale.index(prev)] == 0
         bucketrates = [0.95 * i / sum(buckets) for i in buckets]
+        
        
        
         for i, choice in enumerate(scale):
@@ -137,7 +142,6 @@ def makeMarkovChain(chord, scale):
     #         print()
     
     # # prettyPrintMarkov(mc)
-    assert([sum(mc[row]) == 1 for row in mc.keys()])
     return mc
 
 MARKOVS = {k: makeMarkovChain(NOTES_FOR_CHORDS[k], SCALES_FOR_CHORDS[k]) for k in SCALES_FOR_CHORDS.keys()}
@@ -366,7 +370,7 @@ def getHornPart(chords, melody, length, t, swung, midi):
         hornPart.append(note.Rest(quarterlength=((length * 2) % 1))) # add remainder 
 
     #Horn solo
-    hornPart.append(transposeSolo(getSolo(chords, length), "horn"))
+    hornPart.append(transposeSolo(getSolo(chords, melody, length, "horn"), "horn"))
 
     for n in melody:
         hornPart.insert(n["offset"] + length * 4, copy.deepcopy(n["el"]))
@@ -409,7 +413,7 @@ def getBassPart(chords, melody, length, t, swung):
     bassPart.append(bassPattern)
 
     # Bass solo
-    bassPart.append(transposeSolo(getSolo(chords, length), "bass"))
+    bassPart.append(transposeSolo(getSolo(chords, melody, length, "bass"), "bass"))
 
     #TODO Need to change if we decide that bass pattern should be
     # different for each time through the form
@@ -479,7 +483,7 @@ def getPianoPart(chords, melody, length, t, swung):
         pianoPart.append(copy.deepcopy(n))
 
     # Piano solo
-    pianoPart.append(transposeSolo(getSolo(chords, length), "piano"))
+    pianoPart.append(transposeSolo(getSolo(chords, melody, length, "piano"), "piano"))
 
     # Horn solo, Head
     for _ in range(2):
@@ -491,7 +495,7 @@ def getPianoPart(chords, melody, length, t, swung):
 
 
 ## from comp2.py
-def getRhythms(length): # just doing this for 1 section
+def getRhythms(length): # 
     compositionQuarterLength = length
     currentLength = 0
     rhythms = []
@@ -552,6 +556,19 @@ def getPianoPattern(chords, length):
     # Instead, we will generate some rhythms and choose them usijng monte carlo :)
     for offset in range(int(length)):
         if chordIndex == -1 or (chordIndex != len(chords) - 1 and chords[chordIndex + 1]["offset"] <= offset): # choose a new chord now
+            
+            # old chord
+            # this should be defined from the prev iteration (else block)
+            # row = curChain[(pianoNotes[-1].pitch.midi - curRoot) % 12]
+            # chord_choices = [key + curRoot - 12 for key in row.keys()]
+          
+            chord_length = chords[chordIndex + 1 ["offset"]] - chords[chordIndex ["offset"]]
+            print(f"getting rhythm for chord: {chords[chordIndex]}")
+            print(f"measures {chords[chordIndex["offset"]]} to {chords[chordIndex + 1["offset"]]}")
+            getRhythms(chord_length, chord_choices) # these will be choices generated from 
+            
+
+            # next chord
             chordIndex += 1
             quality = chordSymbolToQuality(chords[chordIndex]["el"].figure)
             curRoot = chords[chordIndex]['el'].root().midi
@@ -561,24 +578,22 @@ def getPianoPattern(chords, length):
             pianoNotes.append(note.Note(random.choice(choices) + curRoot - 12))
         else:  
             row = curChain[(pianoNotes[-1].pitch.midi - curRoot) % 12]
-            # print(row.keys())
-            # print(type(row.keys()))
+            chord_choices = [key + curRoot - 12 for key in row.keys()]
             pianoNotes.append(note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12))
+
+            # pianoNotes.append(note.Note(random.choices(list(row.keys()), weights=list(row.values()), k=1)[0] + curRoot - 12))
     
     # print(pianoNotes)
 
     
-    rhythms = getRhythms(length)
+    # rhythms = getRhythms(length)
+    # mapping = mapRhythms(pianoNotes, rhythms)
 
-    
-    mapping = mapRhythms(pianoNotes, rhythms)
+
+    # for el in mapping:
+    #     pianoPattern.append(copy.deepcopy(el))
 
     ##TODO ensure these notes actually match with the chords using this mapping strategy
-
-    for el in mapping:
-        pianoPattern.append(copy.deepcopy(el))
-
-    # pianoPattern.makeMeasures(inPlace=True)
 
     for el in pianoPattern:
         if isinstance(el, note.Note):
@@ -587,18 +602,6 @@ def getPianoPattern(chords, length):
             el.transpose(+36, inPlace=True)  # Transpose chords up two octaves
     return pianoPattern
 
-
-
-def getSolo(chords, length):
-    solo = []
-    for _ in range(int(length)):
-        solo.append(note.Rest())
-    if length % 1 != 0:
-        solo.append(note.Rest(quarterlength=length % 1))
-    return solo
-
-def transposeSolo(solo, instrument):
-    return solo
 
 if __name__ == "__main__":
     main()
