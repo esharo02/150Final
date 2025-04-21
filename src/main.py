@@ -5,13 +5,6 @@ import copy
 import re
 import random
 from fractions import Fraction
-import os
-import sys
-
-debug_log = os.environ.get("DEBUG_LOG")
-if debug_log:
-    sys.stdout = open(debug_log, "w")
-    sys.stderr = sys.stdout
 
 #https://igm.rit.edu/~jabics/BilesICMC94.pdf
 NOTES_FOR_CHORDS = {
@@ -168,14 +161,14 @@ def main():
     # argparse.add_argument("input", type=str, help="Import a file")
     argparser.add_argument("file", type=str, help="The file to be ran")
     argparser.add_argument("--swing", action='store_true', help="Whether to swing the file or not")
-    #argparse.add_argument("mode", type=str, help="The file to be ran")
-    
+    argparser.add_argument('-m', dest='mode', action='store_const', const='-m', help='Midi output')
+    argparser.add_argument('-s', dest='mode', action='store_const', const='-s', help='Sheet music output. Default.')
 
     # parser.add_argument("--mode", help="run or load", default="load")
 
 
     args = argparser.parse_args()
-
+    mode = args.mode == "-m"
     FILE = args.file
 
     # to access probabilities, markovs["chordquality"]["prev"]["next"]
@@ -212,7 +205,7 @@ def main():
     #         if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
     #             print(chordSymbolToQuality(c["el"].figure))
             
-
+    midi = args.mode == "-m"
     theScore = stream.Score()
 
     # build piano accompaniment
@@ -246,7 +239,7 @@ def main():
 
     #theScore.append(getChordPart(chords, length, args.swing))
     t = tempo.MetronomeMark(number=t.getQuarterBPM(), referent="quarter") if t else None
-    hornPart = getHornPart(chords, melody, length, t, args.swing, midi=False)
+    hornPart = getHornPart(chords, melody, length, t, args.swing, midi)
     bassPart = getBassPart(chords, melody, length, t, args.swing)
     while hornPart.highestOffset < bassPart.highestOffset:
         hornPart.append(note.Rest())
@@ -257,8 +250,10 @@ def main():
     #theScore.append(getPianoPart(chords, melody, length, t, args.swing))
     #theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
-    theScore.show()
-    # theScore.show('midi')
+    if midi:
+        theScore.show('midi')
+    else:
+        theScore.show()
     # theScore.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     # theScore.parts[0].measures(0, 5).show()
 
