@@ -193,7 +193,7 @@ def main():
     # dont inlcude theZone, there is a repeat without a start repeat barline
     # directory = [file for file in directory if "beautiful" not in file.lower() if "ii" not in file.lower() if "july" not in file.lower() if "samba" not in file.lower() if "zone" not in file.lower()]
     # directory = ["../leads/AllOfMe.musicxml"] # for testing
-    FILE = "../leads/FullHouse.musicxml"
+    # FILE = "../leads/FullHouse.musicxml"
     # FILE = "../leads/FullHouse.musicxml"
     # for f in directory:
     #     print("Song: ", f)
@@ -251,23 +251,52 @@ def main():
     pianoPart.makeMeasures(inPlace=True)
     
     hornPart = getHornPart(chords, melody, length, t, args.swing, midi)
-    bassPart = getBassPart(chords, melody, length, t, args.swing)
-    while hornPart.quarterLength < pianoPart.quarterLength:
-        hornPart.append(note.Rest())
-    # hornPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     hornPart.makeMeasures(inPlace=True)
-    while bassPart.quarterLength < pianoPart.quarterLength:
-        bassPart.append(note.Rest())
-    # bassPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+
+    bassPart = getBassPart(chords, melody, length, t, args.swing)
     bassPart.makeMeasures(inPlace=True)
 
-    if not midi and isFourFour and args.swing:
-        drumParts = get_drums(length)
+    if isFourFour and args.swing:
+        drumParts = get_drums(length, midi)
+        ridepart = drumParts[0]
+        hihatpart = drumParts[1]
+        bassDrumPart = drumParts[2]
+        snarePart = drumParts[3]
         for p in drumParts:
-            while p.quarterLength < pianoPart.quarterLength:
+            p.makeMeasures(inPlace=True)
+    else: drumParts = []
+
+    longestLength = max(max(pianoPart.quarterLength, hornPart.quarterLength, bassPart.quarterLength), max([p.quarterLength for p in drumParts]) if not midi and isFourFour and args.swing else 0)
+
+    while pianoPart.quarterLength < longestLength:
+        pianoPart.append(note.Rest())
+    pianoPart.insert(0, dynamics.Dynamic('f'))
+    pianoPart.makeMeasures(inPlace=True)
+
+    while hornPart.quarterLength < longestLength:
+        hornPart.append(note.Rest())
+    hornPart.insert(0, dynamics.Dynamic('ff'))
+    hornPart.makeMeasures(inPlace=True)
+
+    while bassPart.quarterLength < longestLength:
+        bassPart.append(note.Rest())
+    bassPart.insert(0, dynamics.Dynamic('mf'))
+    bassPart.makeMeasures(inPlace=True)
+
+    if drumParts:
+        for p in drumParts:
+            while p.quarterLength < longestLength:
                 p.append(note.Rest())
+            p.insert(0, dynamics.Dynamic('mp'))
             p.makeMeasures(inPlace=True)
             theScore.append(p)
+        # if midi:
+        #     ridepart.transpose("-9", inPlace=True)
+        #     hihatpart.transpose("-16", inPlace=True)
+        #     bassDrumPart.transpose("-24", inPlace=True)
+        #     snarePart.transpose("-20", inPlace=True)
+
+        
 
     theScore.append(hornPart)
     theScore.append(bassPart)
@@ -275,27 +304,27 @@ def main():
     # getPianoPart(chords, melody, length, t, args.swing)
     #theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
-    # if midi:
-    #     theScore.show('midi')
-    # else:
-    #     theScore.show()
+    if midi:
+        theScore.show('midi')
+    else:
+        theScore.show()
     # print("Horn length:", hornPart.quarterLength)
     # print("Bass length:", bassPart.quarterLength)
         # if not midi and isFourFour:
 
     # print("Drums length:", drumParts[0].quarterLength, drumParts[1].quarterLength, drumParts[2].quarterLength, drumParts[3].quarterLength,)
-    theScore.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     # theScore.parts[0].measures(0, 5).show()
+    # theScore.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
 
 
-    theScore.show()
+    # theScore.show()
 
 def swingify(instream, inst):
     t = instream.getElementsByClass(tempo.MetronomeMark)
     instream.makeMeasures(inPlace=True)
     instream.makeRests(fillGaps=True, inPlace=True)
     log = False
-    # log = inst == instrument.UnpitchedPercussion()
+    # log = inst == instrument.Piano()
     if log:
         instream.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     newPart = stream.Part()
@@ -330,7 +359,7 @@ def swingify(instream, inst):
                     newElem.tie = tie.Tie('start')
                 newPart.insert(newElem.offset, newElem)
                 if log:
-                    print(f"Inserting element {newElem} at offset {newElem.offset}")
+                    print(f"1Inserting element {newElem} at offset {newElem.offset}")
                     if(newElem.offset <= 0):
                         print("1")
                     print("Current Build:")
@@ -350,7 +379,7 @@ def swingify(instream, inst):
                     prevElem.tie = tie.Tie('stop')
                 if log:
                     newPart.insert(prevElem.offset, prevElem)
-                    print(f"Inserting element {prevElem} at offset {prevElem.offset}")
+                    print(f"2Inserting element {prevElem} at offset {prevElem.offset}")
                     if(prevElem.offset <= 0):
                         print("2")
                     print("Current Build:")
@@ -360,7 +389,7 @@ def swingify(instream, inst):
                 prevElem.offset = elem.offset - 0.5
                 newPart.insert(prevElem.offset, prevElem)
                 if log:
-                    print(f"Inserting element {prevElem} at offset {prevElem.offset}")
+                    print(f"3Inserting element {prevElem} at offset {prevElem.offset}")
                     if(prevElem.offset <= 0):
                         print("3")
                     print("Current Build:")
@@ -380,7 +409,7 @@ def swingify(instream, inst):
             elem.offset = elem.offset + Fraction(1, 6)
             newPart.insert(elem.offset, newElem)
             if log:
-                print(f"Inserting element {elem} at offset {elem.offset}")
+                print(f"4Inserting element {elem} at offset {elem.offset}")
                 if(elem.offset <= 0):
                     print("4")
                 print("Current Build:")
@@ -388,7 +417,7 @@ def swingify(instream, inst):
         else:
             newPart.insert(elem.offset, elem)
             if log:
-                print(f"Inserting element {elem} at offset {elem.offset}")
+                print(f"5Inserting element {elem} at offset {elem.offset}")
                 if(elem.offset == 0):
                     print("5")
                 print("Current Build:")
@@ -436,7 +465,8 @@ def getHornPart(chords, melody, length, t, swung, midi):
     # hornPart.show('text')
 
     if not midi:
-        hornPart.transpose("-m3", inPlace=True) 
+        hornPart.transpose("M6", inPlace=True) 
+        # hornPart.transpose("-m3", inPlace=True) 
 
     newPart = hornPart if not swung else swingify(hornPart, instrument.AltoSaxophone())
     # hornPart.show('text')
@@ -563,13 +593,13 @@ def getPianoPart(chords, melody, length, t, swung):
     # pianoPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
 
     # Bass solo
-    for n in getPianoPattern(chords, length):
-        pianoPart.append(copy.deepcopy(n))
+    pianoPart.append(getPianoPattern(chords, length))
     # print("Appending bass solo")
     # pianoPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
 
     # Piano solo
-    pianoPart.append(transposeSolo(getSolo(chords, melody, length), "piano"))
+    # pianoPart.append(transposeSolo(getSolo(chords, melody, length), "piano"))
+    pianoPart.append(getPianoPattern(chords, length))
     # print("Appending piano solo")
     # pianoPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
 
@@ -585,9 +615,21 @@ def getPianoPart(chords, melody, length, t, swung):
     # print("Appending extra padding")
     # pianoPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
 
+    for n in pianoPart.notesAndRests:
+        if (n.offset % 4) + n.quarterLength > 4:
+            prevLength = n.quarterLength
+            n.quarterLength = 4 - (n.offset % 4)
+            if not isinstance(n, note.Rest):
+                n.tie = tie.Tie('start')
+                if len(n.pitches) > 1:
+                    pianoPart.insert(n.offset + n.quarterLength, chord.Chord(n.pitches, quarterLength=prevLength - n.quarterLength))
+                else:
+                    pianoPart.insert(n.offset + n.quarterLength, note.Note(n.pitch, quarterLength=prevLength - n.quarterLength))
+            else:
+                pianoPart.insert(n.offset + n.quarterLength, note.Rest(quarterLength=prevLength - n.quarterLength))
+
+    # pianoPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     newPart = pianoPart if not swung else swingify(pianoPart, instrument.Piano())
-    newPart.makeMeasures(inPlace=True)
-    # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
 
     # exit()
     return newPart
@@ -596,15 +638,15 @@ def getPianoPart(chords, melody, length, t, swung):
 
 ## from comp2.py
 def getRhythms(length): # 
-    compositionQuarterLength = length
     currentLength = 0
     rhythms = []
-    while currentLength != compositionQuarterLength:
+    # print(length)
+    while currentLength != length:
         weights = SHORT_LENGTH_WEIGHTS if length < 6 else LONG_LENGTH_WEIGHTS
         curr = random.choices(LENGTH_OPTIONS, weights=weights, k=1)[0]
         # curr = random.choice(LENGTH_OPTIONS)
-        if curr <= compositionQuarterLength - currentLength and \
-            (len(rhythms) < 2 or rhythms[-1] != curr or rhythms[-1] != rhythms[-2] or currentLength == compositionQuarterLength - 0.5):
+        if curr <= length - currentLength and \
+            (len(rhythms) < 2 or rhythms[-1] != curr or rhythms[-1] != rhythms[-2] or currentLength == length - 0.5):
                 rhythms.append(curr)
                 currentLength += curr
     # print(length, sum(rhythms), rhythms)
@@ -613,7 +655,8 @@ def getRhythms(length): #
 LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5] # TODO add more options for length of notes
 SHORT_LENGTH_WEIGHTS = [0.3, 0.25, 0.2, 0.15, 0.1] # TODO add more options for length of notes
 LONG_LENGTH_WEIGHTS = [0.1, 0.2, 0.25, 0.25, 0.2]# TODO add more options for length of notes
-MONTE_REST_PROBABILITY = 0.5 # probability of adding a rest, higher for accomp
+MONTE_SHORT_LENGTH_REST_PROBABILITY = 0.4 # probability of adding a rest, higher for accomp
+MONTE_LONG_LENGTH_REST_PROBABILITY = 0.2 # probability of adding a rest, higher for accomp
 
 ## from comp2.py
 def mapRhythms(notes, root, rhythms, startingOffset): # notes will actually be note objects
@@ -630,9 +673,10 @@ def mapRhythms(notes, root, rhythms, startingOffset): # notes will actually be n
         # print("Current rhythm:", rhythm)
         # addRest = False ## no rests baby
        
-        chordRate = 0.4 if len(rhythms) < 6 else 0.6
-        addRest = ((random.random() <= MONTE_REST_PROBABILITY and len(rhythms) > 1) or currChordAmount / rhythm > chordRate * len(rhythms)) and not (i == len(rhythms) - 1 and currChordAmount == 0)
-        
+        chordRate = 0.3 if len(rhythms) < 4 else 0.6
+        rest_probability = MONTE_SHORT_LENGTH_REST_PROBABILITY if rhythm < 4 else MONTE_LONG_LENGTH_REST_PROBABILITY
+        addRest = ((random.random() <= rest_probability and len(rhythms) > 1) or currChordAmount / rhythm > chordRate * len(rhythms)) and not (i == len(rhythms) - 1 and currChordAmount == 0)
+         
         if not addRest:
             chordNotes = []
             while len(chordNotes) < 2:
@@ -693,6 +737,10 @@ def getPianoPattern(chords, length):
             if chordIndex == len(chords) - 1:
                 chord_length = length - chords[chordIndex]["offset"]
                 # print(f"measures {chords[chordIndex]['offset']} to {length}")
+
+            elif chordIndex == 0:
+                chord_length = chords[chordIndex + 1]["offset"]
+                # print(f"measures {0} to {chords[chordIndex + 1]['offset']}")
                 
             else:
                 chord_length = chords[chordIndex + 1]["offset"] - chords[chordIndex]["offset"]
@@ -724,7 +772,7 @@ def getPianoPattern(chords, length):
                 for n in el.notes:
                     n.octave = random.choice([3, 4])
                 pitches = [n.midi for n in el.pitches]
-                tryAgain = max(pitches) - min(pitches) > 12
+                tryAgain = max(pitches) - min(pitches) > 15
 
     # for el in pianoPattern:
     #     print(el, el.quarterLength)
@@ -743,18 +791,24 @@ def getSolo(chords, melody, length):
 def transposeSolo(solo, instrument):
     return solo
 
-def get_drums(length):
-    rideNoteQuarter = note.Unpitched(displayName='F5')
-    rideNoteQuarter.notehead = 'x'
+def get_drums(length, midi):
+    if midi:
+        rideNoteQuarter = note.Note('D#3')
+        hihatNote = note.Note('G#2')
+        bassNote = note.Note('C2')
+        snareNote = note.Note('D2')
+    else:
+        rideNoteQuarter = note.Unpitched(displayName='F5')
+        hihatNote = note.Unpitched(displayName='D4')
+        bassNote = note.Unpitched(displayName='F4')
+        snareNote = note.Unpitched(displayName='C5')
     rideNoteTrip1 = copy.deepcopy(rideNoteQuarter)
     rideNoteTrip1.duration = duration.Duration(0.5)
     rideNoteTrip2 = copy.deepcopy(rideNoteTrip1)
     rideNoteTrip2.duration = duration.Duration(0.5)
-    hihatNote = note.Unpitched(displayName='D4')
-    hihatNote.notehead = 'x'
-    bassNote = note.Unpitched(displayName='F4')
-    snareNote = note.Unpitched(displayName='C5')
     quarterRest = note.Rest()
+    rideNoteQuarter.notehead = 'x'
+    hihatNote.notehead = 'x'
     inst = instrument.UnpitchedPercussion()
 
     ridePattern = [
