@@ -4,7 +4,14 @@ from checkplayable import get_chords
 import copy
 import re
 import random
+from fractions import Fraction
 import os
+import sys
+
+debug_log = os.environ.get("DEBUG_LOG")
+if debug_log:
+    sys.stdout = open(debug_log, "w")
+    sys.stderr = sys.stdout
 
 #https://igm.rit.edu/~jabics/BilesICMC94.pdf
 NOTES_FOR_CHORDS = {
@@ -123,20 +130,20 @@ def makeMarkovChain(chord, scale):
         
     # [sum(mc[i]) for i in range(len(row))]
 
-    # print(mc)
-    def prettyPrintMarkov(mc):
-        print("Markov Chain Matrix:")
-        print("   ", end="")
-        for col in scale:
-            print(f"{col:5}", end="")
-        print()
-        for prev, row in mc.items():
-            print(f"{prev:3}", end="")
-            for col in scale:
-                print(f"{row[col]:5.2f}", end="")
-            print()
+    # # print(mc)
+    # def prettyPrintMarkov(mc):
+    #     print("Markov Chain Matrix:")
+    #     print("   ", end="")
+    #     for col in scale:
+    #         print(f"{col:5}", end="")
+    #     print()
+    #     for prev, row in mc.items():
+    #         print(f"{prev:3}", end="")
+    #         for col in scale:
+    #             print(f"{row[col]:5.2f}", end="")
+    #         print()
     
-    # prettyPrintMarkov(mc)
+    # # prettyPrintMarkov(mc)
     assert([sum(mc[row]) == 1 for row in mc.keys()])
     return mc
 
@@ -176,8 +183,8 @@ def main():
     #     makeMarkovChain(NOTES_FOR_CHORDS[k], SCALES_FOR_CHORDS[k])
 
 
-    directory_path = "../leads"
-    directory = [os.path.join(directory_path, file) for file in os.listdir(directory_path) if file.endswith((".mxl", ".musicxml"))]
+    #directory_path = "../leads"
+    #directory = [os.path.join(directory_path, file) for file in os.listdir(directory_path) if file.endswith((".mxl", ".musicxml"))]
 
     # dont include hero town
     # dont include OntheSunnySideOfTheStreet_I
@@ -187,20 +194,23 @@ def main():
     # dont include SummerSamba, it has multiple endings
     # dont inlcude theZone, there is a repeat without a start repeat barline
     # directory = [file for file in directory if "beautiful" not in file.lower() if "ii" not in file.lower() if "july" not in file.lower() if "samba" not in file.lower() if "zone" not in file.lower()]
-    directory = ["../leads/SatinDoll.musicxml"] # for testing
-    for f in directory:
-        print("Song: ", f)
-        # chords, melody, length = get_chords(FILE)
-        chords, melody, length = get_chords(f)
-        pieceLength = length * 5 # HEAD, BASS SOLO, PIANO SOLO, HORN SOLO, HEAD
+    # directory = ["../leads/Caravan.musicxml"] # for testing
+    # for f in directory:
+    #     print("Song: ", f)
+    chords, melody, length, t = get_chords(FILE)
+    if len(chords) == 0:
+        print("Error: No chords found in the file.")
+        return
+    #     chords, melody, length = get_chords(f)
+    #     pieceLength = length * 5 # HEAD, BASS SOLO, PIANO SOLO, HORN SOLO, HEAD
 
-        #TODO test with more leads to cover more chord types
+    #     #TODO test with more leads to cover more chord types
 
 
 
-        for c in chords:
-            if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
-                print(chordSymbolToQuality(c["el"].figure))
+    #     for c in chords:
+    #         if chordSymbolToQuality(c["el"].figure) not in SCALES_FOR_CHORDS:
+    #             print(chordSymbolToQuality(c["el"].figure))
             
 
     theScore = stream.Score()
@@ -234,41 +244,136 @@ def main():
     # else:
     #     print('Error: Invalid mode. Mode must be "select" or "input".')
 
-
-    theScore.append(getHornPart(chords, melody, length, args.swing))
-    theScore.append(getBassPart(chords, melody, length, args.swing))
-    #theScore.append(getPianoPart(chords, melody, length))
-    theScore.makeMeasures(inPlace=True)
+    #theScore.append(getChordPart(chords, length, args.swing))
+    t = tempo.MetronomeMark(number=t.getQuarterBPM(), referent="quarter") if t else None
+    hornPart = getHornPart(chords, melody, length, t, args.swing, midi=True)
+    bassPart = getBassPart(chords, melody, length, t, args.swing)
+    while hornPart.highestOffset < bassPart.highestOffset:
+        hornPart.append(note.Rest())
+    # hornPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+    hornPart.makeMeasures(inPlace=True)
+    theScore.append(hornPart)
+    theScore.append(bassPart)
+    #theScore.append(getPianoPart(chords, melody, length, t, args.swing))
+    #theScore.makeMeasures(inPlace=True)
     # theScore.quantize(quarterLengthDivisors=(3,), processOffsets=True, processDurations=True, recurse=True, inPlace=True)
-    theScore.show()
-    # theScore.show('text')
+    # theScore.show()
+    theScore.show('midi')
+    # theScore.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
     # theScore.parts[0].measures(0, 5).show('midi')
 
-from fractions import Fraction
-def swingify(instream):
-    # TODO swingify doesn't work in some cases (Caravan)y
-    # NOTE this doesn't work on Caravan, but Caravan should swing quarter notes anyway. Maybe toss it? @all
-    # NOTE we should only do this when we're outputting to MIDI -- otherwise, we should just slap on a Swing marking on the sheet music
+def swingify(instream, instrument):
+    t = instream.getElementsByClass(tempo.MetronomeMark)
+    instream.makeMeasures(inPlace=True)
+    instream.makeRests(fillGaps=True, inPlace=True)
+    # instream.show('text')
+    newPart = stream.Part()
+    newPart.append(instrument)
+    if t:
+        newPart.append(t[0])
     s = instream.flatten()
     notesAndRests = list(s.notesAndRests)
-    notesAndRests = [elem for elem in notesAndRests if isinstance(elem, note.Note) or isinstance(elem, note.Rest)]
     for i, elem in enumerate(notesAndRests):
-        if elem.duration.quarterLength < 0.5:
-            continue
-        if elem.offset % 1 == 0.5:
+        if elem.offset % 1 == 0.5 and elem.duration.quarterLength >= 0.5 and not isinstance(elem, note.Rest):
+            # print(elem, prevElem)
+            offset = newPart.highestOffset
+            prevElem = newPart.pop()
+            prevElem.offset = offset
+            # print(f"Popping element {prevElem}")
+            # print("Current Build:")
+            # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+            prevElem.quarterLength += Fraction(1, 6)
+            if prevElem.duration.quarterLength > Fraction(2, 3):
+                if isinstance(prevElem, note.Rest):
+                    newElem = note.Rest(quarterLength=prevElem.duration.quarterLength - Fraction(2, 3))
+                elif isinstance(prevElem, note.Note):
+                    newElem = note.Note(prevElem.pitch, quarterLength=prevElem.duration.quarterLength - Fraction(2, 3))
+                elif isinstance(prevElem, chord.Chord):
+                    newElem = chord.Chord(prevElem.pitches, quarterLength=prevElem.duration.quarterLength - Fraction(2, 3))
+                newElem.offset = prevElem.offset
+                if not isinstance(prevElem, note.Rest):
+                    newElem.tie = tie.Tie('start')
+                newPart.insert(newElem.offset, newElem)
+                # print(f"Inserting element {newElem} at offset {newElem.offset}")
+                # if(newElem.offset <= 0):
+                #     print("1")
+                # print("Current Build:")
+                # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+                if isinstance(prevElem, note.Rest):
+                    prevElem = note.Rest(quarterLength=Fraction(2, 3))
+                elif isinstance(prevElem, note.Note):
+                    prevElem = note.Note(prevElem.pitch, quarterLength=Fraction(2, 3))
+                elif isinstance(prevElem, chord.Chord):
+                    prevElem = chord.Chord(prevElem.pitches, quarterLength=Fraction(2, 3))
+                prevElem.offset = elem.offset - 0.5
+                if not isinstance(prevElem, note.Rest):
+                    prevElem.tie = tie.Tie('stop')
+                newPart.insert(prevElem.offset, prevElem)
+                # print(f"Inserting element {prevElem} at offset {prevElem.offset}")
+                # if(prevElem.offset <= 0):
+                #     print("2")
+                # print("Current Build:")
+                # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+            else:
+                prevElem.duration.appendTuplet(duration.Tuplet(3, 2))
+                prevElem.offset = elem.offset - 0.5
+                newPart.insert(prevElem.offset, prevElem)
+                # print(f"Inserting element {prevElem} at offset {prevElem.offset}")
+                # if(prevElem.offset <= 0):
+                #     print("3")
+                # print("Current Build:")
+                # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+            if isinstance(elem, note.Rest):
+                newElem = note.Rest(quarterLength=elem.duration.quarterLength - Fraction(1, 6))
+            elif isinstance(elem, note.Note):
+                newElem = note.Note(elem.pitch, quarterLength=elem.duration.quarterLength - Fraction(1, 6))
+            elif isinstance(elem, chord.Chord):
+                newElem = chord.Chord(elem.pitches, quarterLength=elem.duration.quarterLength - Fraction(1, 6))
+            if elem.tie:
+                newElem.tie = elem.tie
+            newElem.duration.appendTuplet(duration.Tuplet(3, 2))
             elem.offset = elem.offset + Fraction(1, 6)
-            elem.duration.quarterLength -= Fraction(1, 6)
-            notesAndRests[i-1].duration.quarterLength += Fraction(1, 6)
-            
-    return s
+            newPart.insert(elem.offset, newElem)
+            # print(f"Inserting element {elem} at offset {elem.offset}")
+            # if(elem.offset <= 0):
+            #     print("4")
+            # print("Current Build:")
+            # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+        else:
+            newPart.insert(elem.offset, elem)
+            # print(f"Inserting element {elem} at offset {elem.offset}")
+            # if(elem.offset == 0):
+            #     print("5")
+            # print("Current Build:")
+            # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+        prevElem = elem
 
-def getHornPart(chords, melody, length, swung):
+    # print("Current Build:")
+    # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+    return newPart
+
+def getChordPart(chords, length, swung):
+    chordPart = stream.Part()
+    chordPart.append(instrument.Piano())
+    for i in range(5):
+        for c in chords:
+            chordPart.insert(c["offset"] + length * i, copy.deepcopy(c["el"]))
+    
+    chordPart = chordPart if not swung else swingifyChords(chordPart)
+    chordPart.makeMeasures(inPlace=True)
+
+    return chordPart
+
+def getHornPart(chords, melody, length, t, swung, midi):
     hornPart = stream.Part()
     hornPart.append(instrument.AltoSaxophone())
     hornPart.append(clef.TrebleClef())
 
+    if t is not None:
+        hornPart.append(t)
+
     for n in melody:
-        hornPart.append(n["el"])
+        hornPart.insert(n["offset"], n["el"])
 
     #Two solos
     for _ in range(int(length * 2)):
@@ -281,20 +386,36 @@ def getHornPart(chords, melody, length, swung):
     hornPart.append(transposeSolo(getSolo(chords, length), "horn"))
 
     for n in melody:
-        hornPart.append(copy.deepcopy(n["el"]))
+        hornPart.insert(n["offset"] + length * 4, copy.deepcopy(n["el"]))
 
-    #Add chord symbols TODO don't transpose these
-    for i in range(5):
-        for c in chords:
-            hornPart.insert(c["offset"] + length * i, copy.deepcopy(c["el"]))
+    for n in hornPart.notesAndRests:
+        if (n.offset % 4) + n.quarterLength > 4 and not isinstance(n, note.Rest):
+            prevLength = n.quarterLength
+            n.quarterLength = 4 - (n.offset % 4)
+            n.tie = tie.Tie('start')
+            if len(n.pitches) > 1:
+                hornPart.insert(n.offset + n.quarterLength, chord.Chord(n.pitches, quarterLength=prevLength - n.quarterLength))
+            else:
+                hornPart.insert(n.offset + n.quarterLength, note.Note(n.pitch, quarterLength=prevLength - n.quarterLength))
 
-    return hornPart.transpose("M6") if not swung else swingify(hornPart.transpose("M6"))
+    # hornPart.show('text')
+
+    if not midi:
+        hornPart.transpose("-m3", inPlace=True) 
+
+    newPart = hornPart if not swung else swingify(hornPart, instrument.AltoSaxophone())
+    # hornPart.show('text')
+    # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+    return newPart
 
 
-def getBassPart(chords, melody, length, swung):
+def getBassPart(chords, melody, length, t, swung):
     bassPart = stream.Part()
     bassPart.append(instrument.AcousticBass())
     bassPart.append(clef.BassClef())
+
+    if t is not None:
+        bassPart.append(t)
 
 
     #TODO Need to change if we decide that bass pattern should be 
@@ -315,8 +436,13 @@ def getBassPart(chords, melody, length, swung):
         for n in bassPattern:
             bassPart.append(copy.deepcopy(n))
 
-    return bassPart if not swung else swingify(bassPart)
+    while bassPart.highestOffset < length * 5 and bassPart.highestOffset % 4 != 0:
+        bassPart.append(note.Rest())
 
+    newPart = bassPart if not swung else swingify(bassPart, instrument.AcousticBass())
+    newPart.makeMeasures(inPlace=True)
+
+    return newPart
 
 
 # weighted_choices = {
