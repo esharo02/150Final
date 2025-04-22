@@ -265,7 +265,7 @@ def main():
             p.makeMeasures(inPlace=True)
     else: drumParts = []
 
-    longestLength = max(max(pianoPart.quarterLength, pianoSoloPart.quarterLength, hornPart.quarterLength, bassPart.quarterLength), max([p.quarterLength for p in drumParts]))
+    longestLength = max(max(pianoPart.quarterLength, pianoSoloPart.quarterLength, hornPart.quarterLength, bassPart.quarterLength), max([p.quarterLength for p in drumParts]) if drumParts else 0)
 
     while pianoPart.quarterLength < longestLength:
         pianoPart.append(note.Rest())
