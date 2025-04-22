@@ -2,7 +2,7 @@ from music21 import *
 import math
 import random
 import sys
-from crap import NOTES_FOR_CHORDS, SCALES_FOR_CHORDS
+from main import NOTES_FOR_CHORDS, SCALES_FOR_CHORDS
 
 POPULATION_SIZE = 1000
 MUTATION_RATE = 0.02
@@ -14,17 +14,22 @@ GENES = [-1, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
 def getSolo(chords, melody, length, instrument):
 
-    # define a number of sections to split the solo up into. do GA on each of 
-    # these sections
-    numSoloSplits = 16 # parameterize this?
+    # define a number of sections to split the solo up into. do GA on each of these sections
+    numSoloSplits = 4 # parameterize this?
 
     # general idea is that we want to be pretty close to the melody at the beginning of the solo,
     # then less close midway through the solo, then back to close again by the end
     # so define some numbers "what percentage of the fitness function should be defined by closeness"
     # for each split
 
-    # closeness follows cosine, 0.6 at 0th split, 0.0 at middle of solo, 0.6 at last split
-    closeness_percents = [0.38 * (math.cos((math.pi * 2 * i / numSoloSplits) + (math.pi / (2 * numSoloSplits))) + 1) for i in range(numSoloSplits)]
+    # closeness follows cosine, 0.75 at 0th split, 0.0 at middle of solo, 0.75 at last split (approx)
+    # this only applies for saxophone, other instruments don't steal from melody as such
+    closeness_percents = \
+        [0.375 * (math.cos((math.pi * 2 * i / numSoloSplits) + 
+                          (math.pi / (2 * numSoloSplits))) + 1) 
+                for i in range(numSoloSplits)] \
+            if instrument == "horn" else \
+        [0 for _ in range(numSoloSplits)]
     correctness_percents = [1 - i for i in closeness_percents]
 
     # offsets = []
@@ -112,8 +117,9 @@ def getSolo(chords, melody, length, instrument):
         for i in range(POPULATION_SIZE):
             chromosome = [-1 for _ in range(splitlength)]
             for j in range(len(chordsplits[whichsplit])):
-                
-                choices = [-1, *scalesplits[whichsplit][j]]
+                octaveUp = (scalesplits[whichsplit][j][k] + 12 for k in range(len(scalesplits[whichsplit][j])))
+                choices = [-1, *scalesplits[whichsplit][j], *octaveUp]
+                # print(choices)
                 gene = random.choice(choices)
                 # print(gene)
                 chromosome[j] = gene
@@ -184,29 +190,42 @@ def getSolo(chords, melody, length, instrument):
         melodysplit = melodysplits[whichsplit]
         score = 0
         for i, ((gene, chord), (mNote, scale)) in enumerate(zip(zip(chromosome, chordsplit), zip(melodysplit, scalesplit))):
-            if gene in chord or gene == mNote: # if the note is in the chord or the melody, yay
+            if gene % 12 in chord or gene % 12 == mNote: # if the note is in the chord or the melody, yay
                 score += .05
-            elif gene + 1 % 12 in chord or gene - 1 % 12 in chord: # elif because we sometimes this the melody note is 1 away from a chord tone
+            elif (gene + 1) % 12 in chord or (gene - 1) % 12 in chord: # elif because we sometimes this the melody note is 1 away from a chord tone
                 score -= .125
-            if gene in scale: # play notes in the scale!
+            if gene % 12 in scale: # play notes in the scale!
                 score += .4
-            if gene not in scale:
-                score -= .2 # fuck this ever happening
-            if i > 0 and gene == chromosome[i - 1]:
+            else: # gene % 12 not in scale
+                score -= .2 # don't think this can happen
+            if i > 0 and gene % 12 == chromosome[i - 1] % 12:
                 score += .2
-            if i > 1 and gene == chromosome[i - 1] and i > 1 and gene == chromosome[i - 2]:
+            if i > 1 and gene % 12 == chromosome[i - 1] % 12 and i > 1 and gene % 12 == chromosome[i - 2] % 12:
                 score += .2
-            if i > 7 and all(gene == chromosome[i - j] for j in range(1, 8)):
+            if i > 7 and all(gene % 12 == chromosome[i - j] % 12 for j in range(1, 8)):
                 score -= 1  # Penalize heavily for the same note repeated 8 times in a row
-            if i > 3 and gene == chromosome[i - 1] == chromosome[i - 2] == chromosome[i - 3] == chromosome[i - 4]:
+            if i > 3 and all(gene % 12 == chromosome[i - j] % 12 for j in range(1, 4)):
                 score -= 0.2 # not too long of the same note
             if i > 0 and abs((gene % 12) - (chromosome[i - 1] % 12)) > 4:
                 score -= .6
-            if i > 0 and abs((gene % 12) - (chromosome[i - 1] % 12)) < 3:
-                score += .5
+            if i > 0 and 1 <= abs((gene % 12) - (chromosome[i - 1] % 12)) < 3:
+                score += .2
+            if i > 0 and 1 <= abs((gene % 12) - (chromosome[i - 1] % 12)) < 2:
+                score += .6
+                if instrument == "bass":
+                    score += .6 # stepwise motion is good for bass
         percentRests = chromosome.count(-1) / float(len(chromosome))
         if percentRests > 0.45 or percentRests < 0.2:
             score -= .1
+
+        # Count the number of attacks (notes that play after rests, or notes that change)
+        attacks = sum(1 for i in range(1, len(chromosome)) if chromosome[i] != chromosome[i - 1] and chromosome[i] != -1)
+        expectedattacks = 0
+        if instrument == "bass":
+            expectedattacks = 0.5 * len(chromosome) # one attack per beat
+        elif instrument == "piano" or instrument == "horn":
+            expectedattacks = 0.75 * len(chromosome) # one attack every 3/4 of a beat on average
+        score -= abs(expectedattacks - attacks) * .25
         x = (math.tanh(score) + 1) / 2
         # return -4000/441 * x**3 + 4700/441 * x**2 - 100/63 * x
         return x
@@ -353,7 +372,18 @@ def transposeSolo(solo, instrument):
 
 from checkplayable import get_chords
 if __name__ == "__main__":
-    chords, melody, length, t = get_chords("../leads/AllOfMe.musicxml")
+    chords, melody, length, t, i44 = get_chords("../leads/AllOfMe.musicxml")
     # print(melody)
-    getSolo(chords, melody, length, "horn")
+    s = getSolo(chords, melody, length, "horn")
+    st = stream.Stream()
+    for n in s:
+        st.append(n)
+    sc = stream.Score()
+    sc.append(st)
+    for ch in chords:
+        if isinstance(ch['el'], harmony.ChordSymbol):
+            st.insert(ch['offset'], ch['el'])
+    sc.makeMeasures()
+    st.show()
+
     pass
