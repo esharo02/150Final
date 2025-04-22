@@ -56,9 +56,9 @@ def get_chords(mxl_file):
     chords = []
     melody = []
     for element in c.flatten():
-        if isinstance(element, harmony.ChordSymbol) and not isinstance(element, harmony.NoChord):
+        if isinstance(element, harmony.ChordSymbol):
             chords.append({"el": element, "offset": element.offset})
-        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord) or isinstance(element, harmony.ChordSymbol):
+        elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
             element.lyric = None
             melody.append({"el": element, "offset": element.offset})
     
@@ -103,6 +103,10 @@ def get_chords(mxl_file):
         totalLength += repeatSection.quarterLength
     chords.sort(key=lambda x: x["offset"])
     melody.sort(key=lambda x: x["offset"])
+
+    for c in chords:
+        if isinstance(c['el'], harmony.NoChord):
+            chords.remove(c)
 
     #Combine notes at the same offset
     temp = {}

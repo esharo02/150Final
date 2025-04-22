@@ -13,12 +13,14 @@ NOTES_FOR_CHORDS = {
     "6": [0, 4, 7, 9],
     "6 add 9": [0, 2, 4, 7, 9],
     "sus": [0, 4, 5, 7],
+    "sus4": [0, 5, 7],
     "sus add 7": [0, 4, 5, 7, 10],
     "sus add 7 add 9": [0, 2, 4, 5, 7, 10],
     "maj7": [0, 4, 7, 11], 
     "maj7 add 9": [0, 2, 4, 7, 11],
     "maj7 add #11": [0, 4, 6, 7, 11],
     "7": [0, 4, 7, 10],
+    "7 sus 4": [0, 5, 7, 10],
     "9": [0, 2, 4, 7, 10],
     "11": [0, 2, 4, 5, 7, 10],
     "13": [0, 2, 4, 5, 7, 9, 10],
@@ -44,13 +46,13 @@ NOTES_FOR_CHORDS = {
     "o": [0, 3, 6],
     "dim": [0, 3, 6],
     "+": [0, 4, 8],
-    "alter #5": [0, 4, 8],
+    " alter #5": [0, 4, 8],
     "7+": [0, 4, 8, 10],
     "7#9": [0, 3, 4, 7, 10],
     "7#11": [0, 4, 6, 7, 10],
-    "add #11": [0, 4, 6, 7],
+    " add #11": [0, 4, 6, 7],
     "7 add b9": [0, 1, 4, 7, 10],
-    "add b9": [0, 1, 4, 7],
+    " add b9": [0, 1, 4, 7],
     "m7 add b9": [0, 1, 3, 7, 10],
     "maj7#11": [0, 4, 6, 7, 11],
     "power": [0, 7],
@@ -62,12 +64,14 @@ SCALES_FOR_CHORDS = {
     "6": [0, 2, 4, 5, 7, 9, 10],
     "6 add 9": [0, 2, 4, 5, 7, 9, 10],
     "sus": [0, 2, 4, 5, 7, 9, 10],
+    "sus4": [0, 2, 4, 5, 7, 9, 10],
     "sus add 7": [0, 2, 4, 5, 7, 9, 10],
     "sus add 7 add 9": [0, 2, 4, 5, 7, 9, 10],
     "maj7": [0, 2, 4, 7, 9, 11], 
     "maj7 add 9": [0, 2, 4, 7, 9, 11],
     "maj7 add #11": [0, 2, 4, 6, 7, 9, 11],
     "7": [0, 2, 4, 7, 9, 10],
+    "7 sus 4": [0, 2, 4, 5, 7, 9, 10],
     "9": [0, 2, 4, 7, 9, 10],
     "11": [0, 2, 4, 5, 7, 9, 10],
     "13": [0, 2, 4, 5, 7, 9, 10],
@@ -93,13 +97,13 @@ SCALES_FOR_CHORDS = {
     "o": [0, 2, 3, 5, 6, 8, 9, 11],
     "dim": [0, 2, 3, 5, 6, 8, 9, 11],
     "+": [0, 2, 4, 6, 8, 9, 11],
-    "alter #5": [0, 2, 4, 6, 8, 9, 11],
+    " alter #5": [0, 2, 4, 6, 8, 9, 11],
     "7+": [0, 2, 4, 6, 8, 10],
     "7#9": [0, 1, 3, 4, 6, 7, 8, 10],
     "7#11": [0, 2, 4, 6, 7, 9, 10],
-    "add #11": [0, 2, 4, 6, 7, 9, 10],
+    " add #11": [0, 2, 4, 6, 7, 9, 10],
     "7 add b9": [0, 1, 3, 4, 6, 7, 9, 10],
-    "add b9": [0, 1, 3, 4, 6, 7, 9, 10],
+    " add b9": [0, 1, 3, 4, 6, 7, 9, 10],
     "m7 add b9": [0, 1, 3, 5, 7, 9, 10],
     "maj7#11": [0, 2, 4, 6, 7, 9, 11],
     "power": [0, 2, 4, 6, 7, 9, 10],
@@ -271,7 +275,9 @@ def swingify(instream, inst):
     notesAndRests = list(s.notesAndRests)
     for i, elem in enumerate(notesAndRests):
         if elem.offset % 1 == 0.5 and elem.duration.quarterLength >= 0.5 and not isinstance(elem, note.Rest):
+            offset = newPart.highestOffset
             prevElem = newPart.pop()
+            prevElem.offset = offset
             prevElem.quarterLength += Fraction(1, 6)
             if prevElem.duration.quarterLength > Fraction(2, 3):
                 if isinstance(prevElem, note.Rest):
@@ -460,9 +466,6 @@ def getPianoPart(chords, length, t, swung):
         for n in getPianoPattern(chords, length):
             pianoPart.append(copy.deepcopy(n))
 
-    while pianoPart.highestOffset < length * 5 and pianoPart.highestOffset % 4 != 0:
-        pianoPart.append(note.Rest())
-
     pianoPart.makeMeasures(inPlace=True)
     pianoPart.makeTies(inPlace=True)
     newPart = pianoPart if not swung else swingify(pianoPart, instrument.Piano())
@@ -479,7 +482,6 @@ def getPianoPattern(chords, length):
     chordIndex = -1
     pianoPattern = []
     totalmap = []
-
     for offset in range(int(length)):
         #Looking at a new chord
         if chordIndex == -1 or (chordIndex != len(chords) - 1 and chords[chordIndex + 1]["offset"] <= offset):
