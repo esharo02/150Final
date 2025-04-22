@@ -52,13 +52,15 @@ def getSolo(chords, melody, length, instrument):
     # print([len(chordsSplits[i]) for i in range(numSoloSplits)])
     
     # convert melody to chromosome for use in GA "chunk of melody" mutation and fitness
-    print(melody)
+    # print(melody)
     melodychromosome = [-1 for _ in range(int(length * 2))] # 2x length for 8th notes
     for n in melody:
         for o in range(int(n['offset'] * 2), int((n['offset'] + n['el'].quarterLength) * 2)):
             if isinstance(n['el'], note.Note):
                 melodychromosome[o] = n['el'].pitch.pitchClass
-            else:
+            elif isinstance(n['el'], chord.Chord):
+                melodychromosome[o] = n['el'].root().pitchClass
+            else: # rest
                 print(f"A non-note was found in the melody: {n['el']}", file=sys.stderr)
     
     # do the same for chords
@@ -75,20 +77,20 @@ def getSolo(chords, melody, length, instrument):
         else:
             print(f"A non-chord was found in the chords: {n['el']}", file=sys.stderr)
 
-    print(chordchromosome)
-    print(melodychromosome)
-    print(len(chordchromosome))
-    print(len(melodychromosome))
+    # print(chordchromosome)
+    # print(melodychromosome)
+    # print(len(chordchromosome))
+    # print(len(melodychromosome))
 
     scalechromosome = []
     for ch in chordchromosome:
         temp = [(i - ch[0]) % 12 for i in ch] # normalize to C
         # python sucks
-        tempscale = SCALES_FOR_CHORDS[list(NOTES_FOR_CHORDS.keys())[list(NOTES_FOR_CHORDS.values()).index(temp)]]
+        tempscale = SCALES_FOR_CHORDS[list(NOTES_FOR_CHORDS.keys())[list(NOTES_FOR_CHORDS.values()).index(sorted(temp))]]
         tempscale = [(i + ch[0]) % 12 for i in tempscale]
         scalechromosome.append(tempscale)
-    print(scalechromosome)
-    print(len(scalechromosome))
+    # print(scalechromosome)
+    # print(len(scalechromosome))
     def chunk(li, n):
         """ Split a list into n chunks of approximately equal size. Stackoverflow helped here. """ 
         d, r = divmod(len(li), n)
@@ -140,9 +142,7 @@ def getSolo(chords, melody, length, instrument):
         newPopulation = []
         for i in range(POPULATION_SIZE):
             parent1 = random.choices(population, weights=fitnessScores)[0]
-            parent2 = None
-            while parent2 == None or parent2 == parent1:
-                parent2 = random.choices(population, weights=fitnessScores)[0]
+            parent2 = random.choices(population, weights=fitnessScores)[0]
             child = []
             if random.random() < CROSSOVER_RATE:
                 crossoverPoint = random.randint(0, len(parent1))
@@ -245,6 +245,7 @@ def getSolo(chords, melody, length, instrument):
         best = 0
         tenthbest = 0
         x = 0
+        okayWereDone = False
         while best < 0.99 and x < 100:
             
             fitnessScores = getFitnessScores(pop, whichsplit)
@@ -265,8 +266,12 @@ def getSolo(chords, melody, length, instrument):
             pop, fitnessScores = list(pop), list(fitnessScores)
             
             pop = nextGeneration(pop, fitnessScores, whichsplit)
-            # if x % 10 == 0:
-            print(f"Generation {x} for split {whichsplit}, tenthbest = {best}, corr = {tenthbestcorr}, close = {tenthbestclose}")
+            if x % 10 == 0:
+                if tenthbestclose == 0:
+                    okayWereDone = True
+                if okayWereDone:
+                    break
+                print(f"Generation {x} for split {whichsplit}, tenthbest = {best}, corr = {tenthbestcorr}, close = {tenthbestclose}", file=sys.stderr)
             
         # best = sorted(fitnessScores, reverse=True)[0]
         # best_idx = fitnessScores.index(best)    
@@ -275,8 +280,8 @@ def getSolo(chords, melody, length, instrument):
         
 
     melodies = [generateSplit(i) for i in range(numSoloSplits)]
-    print(melodies)
-    solo = stream.Part()
+    # print(melodies)
+    solo = []
     for melody in melodies:
         previous_note = None
         duration = 0.5
@@ -302,17 +307,18 @@ def getSolo(chords, melody, length, instrument):
         if previous_note:  # Add the last note or rest
             previous_note.quarterLength = duration
             solo.append(previous_note)
-    print(length)
-    print(closeness_percents)
-    print(correctness_percents)
-    sc = stream.Score()
-    for chord_entry in chords:
-        chord_symbol = chord_entry['el']
-        offset = chord_entry['offset']
-        if isinstance(chord_symbol, harmony.ChordSymbol):
-            solo.insert(offset, chord_symbol)
-    sc.append(solo)
-    solo.show()
+    return solo
+    # print(length)
+    # print(closeness_percents)
+    # print(correctness_percents)
+    # sc = stream.Score()
+    # for chord_entry in chords:
+    #     chord_symbol = chord_entry['el']
+    #     offset = chord_entry['offset']
+    #     if isinstance(chord_symbol, harmony.ChordSymbol):
+    #         solo.insert(offset, chord_symbol)
+    # sc.append(solo)
+    # solo.show()
     # sc.makeMeasures()
     # sc.show('text')
     # sc.show()
@@ -328,11 +334,26 @@ def getSolo(chords, melody, length, instrument):
     exit()
 
 def transposeSolo(solo, instrument):
+    # Transpose the solo to the key of the instrument
+    # transposition_interval = interval.Interval('P0')  # Default to no transposition
+    if instrument.lower() in ["piano"]:
+        for n in solo:
+            if isinstance(n, note.Note):
+                n.transpose("P8", inPlace=True)
+            # n.transpose("P8", inPlace=True)
+    elif instrument.lower() in ["bass"]:
+        for n in solo:
+            if isinstance(n, note.Note):
+                n.transpose("-P15", inPlace=True)
+            # n.transpose("-P15", inPlace=True)
+
+    
+
     return solo
 
 from checkplayable import get_chords
 if __name__ == "__main__":
     chords, melody, length, t = get_chords("../leads/AllOfMe.musicxml")
-    print(melody)
+    # print(melody)
     getSolo(chords, melody, length, "horn")
     pass
