@@ -2,19 +2,9 @@ from music21 import *
 import math
 import random
 import sys
-from main import NOTES_FOR_CHORDS, SCALES_FOR_CHORDS
+from constants import *
 
-POPULATION_SIZE = 100
-MUTATION_RATE = 0.04
-CROSSOVER_RATE = 0.7
-SOLOCHUNK_RATE = 0.2
-QUOTESELF_RATE = 0.1
-CHORD_TONE_MUTATION_RATE = 0.03
-GENERATIONS = 100
-GENES = [-1, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-
-
-def getSolo(chords, melody, length, instrument):
+def getSolo(chords, melody, length, instrument, trades=False):
 
     # define a number of sections to split the solo up into. do GA on each of these sections
     numSoloSplits = int(length // 16) # parameterize this?
@@ -24,21 +14,27 @@ def getSolo(chords, melody, length, instrument):
     # so define some numbers "what percentage of the fitness function should be defined by closeness"
     # for each split
 
-    # closeness follows cosine, 0.75 at 0th split, 0.0 at middle of solo, 0.75 at last split (approx)
-    # this only applies for saxophone, other instruments don't steal from melody as such
-    closeness_percents = \
-        [(math.cos((math.pi * 2 * i / numSoloSplits) + 
-                          (math.pi / (2 * numSoloSplits))) + 1) 
-                for i in range(numSoloSplits)]
-    if instrument == "horn":
-        mod = 0.45
+    if not trades:
+
+        # closeness follows cosine, 0.75 at 0th split, 0.0 at middle of solo, 0.75 at last split (approx)
+        closeness_percents = \
+            [(math.cos((math.pi * 2 * i / numSoloSplits) + 
+                            (math.pi / (2 * numSoloSplits))) + 3) / 4
+                    for i in range(numSoloSplits)]
+        if instrument == "horn":
+            mod = 0.4
+        elif instrument == "piano":
+            mod = 0.4
+        else:
+            mod = 0.3
+
     else:
-        mod = 0.15
+        closeness_percents = [0.2] + [0.6 for _ in range(numSoloSplits - 1)]
+        mod = 1
+    
     closeness_percents = [i * mod for i in closeness_percents]
     correctness_percents = [1 - i for i in closeness_percents]
 
-
-            
 
     # convert melody to chromosome for use in GA "chunk of melody" mutation and fitness
     melodychromosome = [-1 for _ in range(int(length * 2))] # 2x length for 8th notes
@@ -138,6 +134,10 @@ def getSolo(chords, melody, length, instrument):
         return best_child
 
     def nextGeneration(population, fitnessScores, whichsplit):
+        def tournament_selection(population, fitnessScores, k=3):
+            candidates = random.sample(list(zip(population, fitnessScores)), k)
+            return max(candidates, key=lambda x: x[1])[0]
+
         """ Create the next generation of the population. 
         The next generation is created by selecting two parents from the population
         based on their fitness. The child is created by crossing over the parents at
@@ -146,19 +146,25 @@ def getSolo(chords, melody, length, instrument):
         child. The child is then added to the new population. """
         newPopulation = []
         for _ in range(POPULATION_SIZE):
-            parent1 = random.choices(population, weights=fitnessScores)[0]
-            parent2 = random.choices(population, weights=fitnessScores)[0]
+            # parent1 = random.choices(population, weights=fitnessScores)[0]
+            # parent2 = random.choices(population, weights=fitnessScores)[0]
+            parent1 = tournament_selection(population, fitnessScores)
+            parent2 = tournament_selection(population, fitnessScores)
             child = []
             if random.random() < CROSSOVER_RATE:
                 crossoverPoint = random.randint(0, len(parent1))
-                child = parent1[crossoverPoint:] + parent2[:crossoverPoint]
+                child = parent1[:crossoverPoint] + parent2[crossoverPoint:]
             else:
                 child = random.choice([parent1, parent2])
             for j in range(len(child)):
                 if random.random() < MUTATION_RATE:
                     octaveUp = [scalesplits[whichsplit][j][k] + 12 for k in range(len(scalesplits[whichsplit][j]))]
-                    halfOctaveUp = [octaveUp[k] for k in range(len(octaveUp)) if octaveUp[k] <= 18]
-                    choices = [-1, *scalesplits[whichsplit][j], *halfOctaveUp]
+                    if instrument == "piano":
+                        halfOctaveUp = [octaveUp[k] for k in range(len(octaveUp)) if octaveUp[k] <= 18]
+                        choices = [-1, *scalesplits[whichsplit][j], *halfOctaveUp]
+                    else:
+                        halfOctaveDown = [octaveUp[k] - 12 for k in range(len(octaveUp)) if octaveUp[k] - 12 >= 0]
+                        choices = [-1, *halfOctaveDown, *scalesplits[whichsplit][j]]
                     child[j] = random.choice(choices)
             if random.random() < CHORD_TONE_MUTATION_RATE:
                 for j, gene in enumerate(child):
@@ -189,6 +195,8 @@ def getSolo(chords, melody, length, instrument):
                         child[j] = random.choice(chordsplits[whichsplit][j])
             child = local_hill_climb(child, whichsplit)
             newPopulation.append(child)
+        elite = [x for _, x in sorted(zip(fitnessScores, population), reverse=True)[:ELITE_COUNT]]
+        newPopulation = elite + newPopulation[:-ELITE_COUNT]
         return newPopulation
 
     def getFitnessScores(population, whichsplit):
@@ -219,45 +227,46 @@ def getSolo(chords, melody, length, instrument):
         for i, ((gene, chord), (mNote, scale)) in enumerate(zip(zip(chromosome, chordsplit), zip(melodysplit, scalesplit))):
             if gene == -1: # rest
                 score += 1
-            if gene % 12 in chord or gene % 12 == mNote: # if the note is in the chord or the melody, yay
-                score += 1.0
-                if i == 0 or (chordsplit[i-1] != chordsplit[i]):
-                    score += 2.0
-            elif (gene + 1) % 12 in chord or (gene - 1) % 12 in chord: # elif because we sometimes this the melody note is 1 away from a chord tone
-                score -= .125
-            if gene % 12 not in chord: # play notes in the scale!
-                score -= 0.5
-            # else: # gene % 12 not in scale
-            #     score -= 2 # don't think this can happen
-            if i > 0 and gene % 12 == chromosome[i - 1] % 12:
-                score += .4
-            if i > 1 and gene == chromosome[i - 1] and i > 1 and gene == chromosome[i - 2]:
-                score += .4
-            if i > 7 and all(gene == chromosome[i - j] for j in range(1, 8)):
-                score -= 2  # Penalize heavily for the same note repeated 8 times in a row
-            if i > 3 and all(gene == chromosome[i - j] for j in range(1, 4)) and gene % 12 in chord:
-                score += 4.8 - (1.2 * min(longNoteCount, 2)) if gene in chord else -2.4
-                longNoteCount += 1 # not too long of the same note
-            if i > 0 and abs((gene) - (chromosome[i - 1])) > 4:
-                score -= 2.4
-                # if instrument == "piano":
-                #     score += 2.6 # this is fine for piano
-            if i > 0 and abs((gene) - (chromosome[i - 1])) > 9:
-                score -= 10
-                if instrument == "horn":
-                    score -= 5 # this is even worse on sax
-            if i > 0 and 1 <= abs((gene) - (chromosome[i - 1])) < 3:
-                score += 1
-            if i > 0 and 1 <= abs((gene) - (chromosome[i - 1])) < 2:
-                score += 4.8 * stepwiseCount
-                stepwiseCount /= 2
-                if instrument == "bass":
-                    score += 1.4 # stepwise motion is good for bass
-            else: 
-                stepwiseCount = 2
+            else:
+                if gene % 12 in chord or gene % 12 == mNote: # if the note is in the chord or the melody, yay
+                    score += 1.5
+                    if i == 0 or (chordsplit[i-1] != chordsplit[i]):
+                        score += 2
+                elif (gene + 1) % 12 in chord or (gene - 1) % 12 in chord: # elif because we sometimes this the melody note is 1 away from a chord tone
+                    j = i
+                    while j > 0 and gene % 12 == chromosome[j] % 12:
+                        score -= 2
+                        j -= 1
+                # if gene % 12 not in chord: # play notes in the chord!
+                #     score -= 0.5
+                if i > 0 and gene % 12 == chromosome[i - 1] % 12:
+                    score += .8
+                if i > 1 and gene % 12 == chromosome[i - 1] % 12 and gene % 12 == chromosome[i - 2] % 12:
+                    score += 1.4
+                if i > 7 and all(gene == chromosome[i - j] for j in range(1, 8)):
+                    score -= 6  # Penalize heavily for the same note repeated 8 times in a row
+                if i > 3 and all(gene == chromosome[i - j] for j in range(1, 4)) and gene % 12 in chord:
+                    score += (4 - (1 * min(longNoteCount, 2))) if gene in chord else -3
+                    longNoteCount += 1 # not too long of the same note
+                if i > 0 and abs((gene) - (chromosome[i - 1])) > 5:
+                    if instrument != "piano":
+                        score -= 3 
+                    else:
+                        score -= 1 # Less bad for piano
+                if i > 0 and abs((gene) - (chromosome[i - 1])) > 7:
+                    score -= 10
+                    if instrument == "horn":
+                        score -= 5 # this is even worse on sax
+                # if i > 0 and 1 <= abs((gene) - (chromosome[i - 1])) < 3:
+                #     score += 1
+                if i > 0 and 1 <= abs((gene) - (chromosome[i - 1])) < 3:
+                    score += 1.7 * stepwiseCount
+                    stepwiseCount /= 2
+                else: 
+                    stepwiseCount = 2
         percentRests = chromosome.count(-1) / float(len(chromosome))
         if percentRests > 0.45 or percentRests < 0.2:
-            score -= 2
+            score -= 10
 
         # Count the number of attacks (notes that play after rests, or notes that change)
         attacks = sum(1 for i in range(1, len(chromosome)) if chromosome[i] != chromosome[i - 1] and chromosome[i] != -1)
@@ -320,6 +329,7 @@ def getSolo(chords, melody, length, instrument):
             best_idx = fitnessScores.index(best)    
             tenthbestcorr = correctnessScores[best_idx]
             tenthbestclose = closenessScores[best_idx]
+            average = sum(fitnessScores) / len(fitnessScores)
             # print(f"{x}: {fitnessScores}")
             x += 1
             # Remove the bottom half of the population based on fitness scores
@@ -334,43 +344,93 @@ def getSolo(chords, melody, length, instrument):
                     okayWereDone = True
                 if okayWereDone:
                     break
-                print(f"Generation {x} for split {whichsplit}, tenthbest = {best}, corr = {tenthbestcorr}, close = {tenthbestclose}", file=sys.stderr)
+                print(f"Generation {x} for split {whichsplit}, average = {average}, tenthbest = {tenthbest}, corr = {tenthbestcorr}, close = {tenthbestclose}", file=sys.stderr)
             
         # best = sorted(fitnessScores, reverse=True)[0]
         # best_idx = fitnessScores.index(best)    
         # print(f"Split {whichsplit}: corr={correctnessScores[best_idx]:.4f} at {correctness_percents[whichsplit]}, close={closenessScores[best_idx]:.4f} at {closeness_percents[whichsplit]}")
         return pop[best_idx]
+    
+    def transposeSolo(solo):
+        # Transpose the solo to the range of the instrument
+        if trades:
+            curNoteIdx = 0
+            curNoteOffset = 0
+            offset = 0
+            for i, split in enumerate(melodysplits):
+                offset += len(split) / 2
+                while curNoteOffset < offset:
+                    # Piano, Sax, Piano, Sax, etc.
+                    if i % 2 == 0 and isinstance(solo[curNoteIdx], note.Note):
+                        solo[curNoteIdx].transpose("P8", inPlace=True)
+                    curNoteOffset += solo[curNoteIdx].quarterLength
+                    curNoteIdx += 1
+                    
+        else:
+            if instrument.lower() in ["piano"]:
+                for n in solo:
+                    if isinstance(n, note.Note):
+                        n.transpose("P8", inPlace=True)
+                    # n.transpose("P8", inPlace=True)
+            elif instrument.lower() in ["bass"]:
+                for n in solo:
+                    if isinstance(n, note.Note):
+                        n.transpose("-P15", inPlace=True)
+                    n.transpose("-P15", inPlace=True)
         
+    offset = 0
     for i in range(numSoloSplits):
-        melodies.append(generateSplit(i))
+        # print("Current melodychromosome:", melodychromosome)
+        split = generateSplit(i)
+        melodies.append(split)
+        if trades and i < numSoloSplits - 1:
+            if instrument == "horn":
+                instrument = "piano:"
+            else:
+                instrument = "horn"
+            melodychromosome = melodychromosome[:offset] + split + melodychromosome[offset + len(split):]
+            # print("Keeping part of melodychromosome", melodychromosome[:offset])
+            # print("New split:", split)
+            # print("Length of melodychromosome:", len(melodychromosome))
+            offset += len(split)
+
+
+
     # print(melodies)
     solo = []
+    if trades:
+        instrument = "piano"
     for melody in melodies:
         previous_note = None
-        duration = 0.5
+        d = 0.5
         for note_value in melody:
             if note_value == -1:  # Handle rests
                 if isinstance(previous_note, note.Rest):
-                    duration += 0.5
+                    d += 0.5
                 else:
                     if previous_note:
-                        previous_note.quarterLength = duration
+                        previous_note.duration = duration.Duration(quarterLength=d)
                         solo.append(previous_note)
                     previous_note = note.Rest(quarterLength=0.5)
-                    duration = 0.5
+                    d = 0.5
             else:  # Handle notes
                 if isinstance(previous_note, note.Note) and previous_note.pitch.pitchClass == note_value and (random.random() < 0.85 or instrument == "horn"):
-                    duration += 0.5
+                    d += 0.5
                 else:
                     if previous_note:
-                        previous_note.quarterLength = duration
+                        previous_note.duration = duration.Duration(quarterLength=d)
                         solo.append(previous_note)
                     previous_note = note.Note(note_value + 60, quarterLength=0.5)
-                    duration = 0.5
+                    d = 0.5
         if previous_note:  # Add the last note or rest
-            previous_note.quarterLength = duration
+            previous_note.duration = duration.Duration(quarterLength=d)
             solo.append(previous_note)
-    return solo
+        if trades and instrument == "horn":
+            instrument = "piano"
+        elif trades and instrument == "piano":
+            instrument = "horn"
+    transposeSolo(solo)
+    return solo, [len(split) / 2 for split in melodysplits]
     # print(length)
     # print(closeness_percents)
     # print(correctness_percents)
@@ -396,25 +456,11 @@ def getSolo(chords, melody, length, instrument):
     # return solo
     exit()
 
-def transposeSolo(solo, instrument):
-    # Transpose the solo to the key of the instrument
-    # transposition_interval = interval.Interval('P0')  # Default to no transposition
-    if instrument.lower() in ["piano"]:
-        for n in solo:
-            if isinstance(n, note.Note):
-                n.transpose("P8", inPlace=True)
-            # n.transpose("P8", inPlace=True)
-    elif instrument.lower() in ["bass"]:
-        for n in solo:
-            if isinstance(n, note.Note):
-                n.transpose("-P15", inPlace=True)
-            # n.transpose("-P15", inPlace=True)
-
     
 
     return solo
 
-from checkplayable import get_chords
+from ingestlead import get_chords
 if __name__ == "__main__":
     chords, melody, length, t, i44 = get_chords("../leads/AllOfMe.musicxml")
     # print(melody)

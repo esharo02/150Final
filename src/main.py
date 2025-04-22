@@ -1,166 +1,12 @@
 from music21 import *
 import argparse
-from checkplayable import get_chords
+from ingestlead import get_chords
 import copy
 import re
 import random
 from fractions import Fraction
 from solo import *
-
-#Notes that form given chords
-NOTES_FOR_CHORDS = {
-    "": [0, 4, 7], 
-    "6": [0, 4, 7, 9],
-    "6 add 9": [0, 2, 4, 7, 9],
-    "sus": [0, 4, 5, 7],
-    "sus4": [0, 5, 7],
-    "sus add 7": [0, 4, 5, 7, 10],
-    "sus add 7 add 9": [0, 2, 4, 5, 7, 10],
-    "maj7": [0, 4, 7, 11], 
-    "maj7 add 9": [0, 2, 4, 7, 11],
-    "maj7 add #11": [0, 4, 6, 7, 11],
-    "7": [0, 4, 7, 10],
-    "7 sus 4": [0, 5, 7, 10],
-    "9": [0, 2, 4, 7, 10],
-    "11": [0, 2, 4, 5, 7, 10],
-    "13": [0, 2, 4, 5, 7, 9, 10],
-    "M13": [0, 2, 4, 6, 7, 9, 11],
-    "m7": [0, 3, 7, 10],
-    "m9": [0, 2, 3, 7, 10],
-    "m11": [0, 2, 3, 5, 7, 10],
-    "m13": [0, 2, 3, 5, 7, 9, 10],
-    "7 alter b5": [0, 4, 6, 10],
-    "7 alter #5": [0, 4, 8, 10],
-    "7 alter #5 add #9": [0, 3, 4, 6, 10], 
-    "7 add 9": [0, 2, 4, 7, 10], 
-    "7 add #9": [0, 3, 4, 7, 10], 
-    "7 add b13": [0, 4, 7, 8, 10], 
-    "9 alter b5": [0, 2, 4, 6, 10], 
-    "m7 add 9": [0, 2, 3, 7, 10],
-    "m": [0, 3, 7], 
-    "m add #2": [0, 3, 7],
-    "m6": [0, 3, 7, 9],
-    "ø7": [0, 3, 6, 10],
-    "o7": [0, 3, 6, 9],
-    "m7 alter b5": [0, 3, 6, 10],
-    "o": [0, 3, 6],
-    "dim": [0, 3, 6],
-    "+": [0, 4, 8],
-    " alter #5": [0, 4, 8],
-    "7+": [0, 4, 8, 10],
-    "7#9": [0, 3, 4, 7, 10],
-    "7#11": [0, 4, 6, 7, 10],
-    " add #11": [0, 4, 6, 7],
-    "7 add b9": [0, 1, 4, 7, 10],
-    " add b9": [0, 1, 4, 7],
-    "m7 add b9": [0, 1, 3, 7, 10],
-    "maj7#11": [0, 4, 6, 7, 11],
-    "power": [0, 7],
-    "mM7": [0, 3, 7, 11]
-}
-#Partially from https://igm.rit.edu/~jabics/BilesICMC94.pdf
-SCALES_FOR_CHORDS = {
-    "": [0, 2, 4, 5, 7, 9, 11],
-    "6": [0, 2, 4, 5, 7, 9, 10],
-    "6 add 9": [0, 2, 4, 5, 7, 9, 10],
-    "sus": [0, 2, 4, 5, 7, 9, 10],
-    "sus4": [0, 2, 4, 5, 7, 9, 10],
-    "sus add 7": [0, 2, 4, 5, 7, 9, 10],
-    "sus add 7 add 9": [0, 2, 4, 5, 7, 9, 10],
-    "maj7": [0, 2, 4, 7, 9, 11], 
-    "maj7 add 9": [0, 2, 4, 7, 9, 11],
-    "maj7 add #11": [0, 2, 4, 6, 7, 9, 11],
-    "7": [0, 2, 4, 7, 9, 10],
-    "7 sus 4": [0, 2, 4, 5, 7, 9, 10],
-    "9": [0, 2, 4, 7, 9, 10],
-    "11": [0, 2, 4, 5, 7, 9, 10],
-    "13": [0, 2, 4, 5, 7, 9, 10],
-    "M13": [0, 2, 4, 6, 7, 9, 11],
-    "m7": [0, 2, 3, 5, 7, 10],
-    "m9": [0, 2, 3, 5, 7, 10],
-    "m11": [0, 2, 3, 5, 7, 10],
-    "m13": [0, 2, 3, 5, 7, 9, 10],
-    "7 alter b5": [0, 2, 4, 5, 6, 9, 10],
-    "7 alter #5": [0, 2, 4, 6, 8, 10],
-    "7 alter #5 add #9": [0, 1, 3, 4, 6, 8, 10],          
-    "7 add 9": [0, 2, 4, 7, 9, 10], 
-    "7 add #9": [0, 1, 3, 4, 7, 9, 10], 
-    "7 add b13": [0, 1, 3, 4, 6, 7, 8, 10], 
-    "9 alter b5": [0, 2, 4, 5, 6, 9, 10], 
-    "m7 add 9": [0, 2, 3, 5, 7, 10],
-    "m": [0, 2, 3, 5, 7, 8, 10], 
-    "m add #2": [0, 2, 3, 5, 7, 8, 10],
-    "m6": [0, 2, 3, 5, 7, 9, 11],
-    "ø7": [0, 3, 5, 6, 8, 10],
-    "o7": [0, 2, 3, 5, 6, 8, 9, 11],
-    "m7 alter b5": [0, 3, 5, 6, 8, 10],
-    "o": [0, 2, 3, 5, 6, 8, 9, 11],
-    "dim": [0, 2, 3, 5, 6, 8, 9, 11],
-    "+": [0, 2, 4, 6, 8, 9, 11],
-    " alter #5": [0, 2, 4, 6, 8, 9, 11],
-    "7+": [0, 2, 4, 6, 8, 10],
-    "7#9": [0, 1, 3, 4, 6, 7, 8, 10],
-    "7#11": [0, 2, 4, 6, 7, 9, 10],
-    " add #11": [0, 2, 4, 6, 7, 9, 10],
-    "7 add b9": [0, 1, 3, 4, 6, 7, 9, 10],
-    " add b9": [0, 1, 3, 4, 6, 7, 9, 10],
-    "m7 add b9": [0, 1, 3, 5, 7, 9, 10],
-    "maj7#11": [0, 2, 4, 6, 7, 9, 11],
-    "power": [0, 2, 4, 6, 7, 9, 10],
-    "mM7": [0, 2, 3, 5, 7, 9, 11]
-}
-
-def makeMarkovChain(chord, scale):
-    """
-    Creates a Markov chain for the given chord and scale. 
-
-    Returns a dictionary where the keys are previous notes and the values are dictionaries 
-    of next notes with their probabilities.
-    """
-    mc = {}
-    for prev in scale:
-        row = {}
-        buckets = [0] * len(scale) 
-        for i, choice in enumerate(scale): 
-            buckets[i] += 1 # each note has a chance of being selected
-            if choice in chord and prev not in chord: # notes in the chord have a higher chance of being selected
-                buckets[i] += 1
-            if choice not in chord and prev in chord:
-                buckets[i] += 1
-            if choice == prev:
-                if i != 0:
-                    buckets[(i - 1)] += 1 # the note before it has additional chance of being selected
-                buckets[i] == 0
-                if i != len(scale) - 1:
-                    buckets[(i + 1)] += 1 # the note after it has additional chance of being selected
-        buckets[scale.index(prev)] == 0
-        bucketrates = [0.95 * i / sum(buckets) for i in buckets]
-        
-        for i, choice in enumerate(scale):
-            if prev == choice: 
-                row[choice] = 0.05 # Low chance of repeated note
-            else:
-                row[choice] = bucketrates[i]
-        mc[prev] = row
-    return mc
-
-MARKOVS = {k: makeMarkovChain(NOTES_FOR_CHORDS[k], SCALES_FOR_CHORDS[k]) for k in SCALES_FOR_CHORDS.keys()}
-
-def chordSymbolToQuality(s):
-    """
-    Converts a chord symbol to its quality, removing its root and inversion.
-
-    Returns the chord quality as a string.
-    """
-    match = re.search(r'[^A-Z]', s)
-    if match:
-        q = s[match.start():]
-        if q[0] == '-' or q[0] == '#':
-            q = q[1:]
-        if '/' in q:
-            q = q.split('/')[0]
-        return q
-    return ''
+from constants import *
 
 def main():
 
@@ -178,6 +24,10 @@ def main():
     if len(chords) == 0:
         print("Error: No chords found in the file.")
         return
+
+    # solo, lengths = getSolo(chords, melody, length, "piano", True)
+    # print(lengths)
+    # exit()
 
     theScore = buildScore(chords, melody, length, t.getQuarterBPM(), args.swing, midi, isFourFour)
     if midi:
@@ -199,10 +49,12 @@ def buildScore(chords, melody, length, t, swing, midi, isFourFour):
     pianoPart = getPianoPart(chords, length, t, swing)
     pianoPart.makeMeasures(inPlace=True)
 
-    pianoSoloPart = getPianoSoloPart(chords, melody, length, t, swing)
+    pianoTrades, hornTrades = getTrades(chords, melody, length)
+
+    pianoSoloPart = getPianoSoloPart(chords, melody, length, t, swing, pianoTrades)
     pianoSoloPart.makeMeasures(inPlace=True)
     
-    hornPart = getHornPart(chords, melody, length, t, swing, midi)
+    hornPart = getHornPart(chords, melody, length, t, swing, midi, hornTrades)
     hornPart.makeMeasures(inPlace=True)
 
     bassPart = getBassPart(chords, melody, length, t, swing)
@@ -218,47 +70,62 @@ def buildScore(chords, melody, length, t, swing, midi, isFourFour):
         max(pianoPart.quarterLength, pianoSoloPart.quarterLength, hornPart.quarterLength, bassPart.quarterLength), 
         max([p.quarterLength for p in drumParts]) if drumParts else 0)
     
-    standardizeLength(hornPart, longestLength)
+    fillUpToLength(hornPart, longestLength)
     hornPart.insert(0, dynamics.Dynamic('f'))
-    hornPart.insert(length * 3, dynamics.Dynamic('ff'))
-    hornPart.insert(length * 4, dynamics.Dynamic('f'))
     hornPart.makeMeasures(inPlace=True)
     theScore.append(hornPart)
 
-    standardizeLength(pianoSoloPart, longestLength)
+    fillUpToLength(pianoSoloPart, longestLength)
     pianoSoloPart.insert(0, dynamics.Dynamic('f'))
     pianoSoloPart.makeMeasures(inPlace=True)
     theScore.append(pianoSoloPart)
 
-    standardizeLength(pianoPart, longestLength)
-    pianoPart.insert(0, dynamics.Dynamic('f'))
-    pianoPart.insert(length, dynamics.Dynamic('p'))
-    pianoPart.insert(length * 2, dynamics.Dynamic('mf'))
-    pianoPart.insert(length * 4, dynamics.Dynamic('f'))
+    fillUpToLength(pianoPart, longestLength)
+    pianoPart.insert(0, dynamics.Dynamic('mf'))
+    pianoPart.insert(length, dynamics.Dynamic('mp'))
+    pianoPart.insert(length * 4, dynamics.Dynamic('mf'))
     pianoPart.makeMeasures(inPlace=True)
     theScore.append(pianoPart)
 
-    standardizeLength(bassPart, longestLength)
+    fillUpToLength(bassPart, longestLength)
     bassPart.insert(0, dynamics.Dynamic('mf'))
-    bassPart.insert(length, dynamics.Dynamic('ff'))
-    bassPart.insert(length * 2, dynamics.Dynamic('mf'))
     bassPart.makeMeasures(inPlace=True)
     theScore.append(bassPart)
 
     if drumParts:
         for p in drumParts:
-            standardizeLength(p, longestLength)
+            fillUpToLength(p, longestLength)
             p.insert(0, dynamics.Dynamic('mp'))
-            p.insert(length, dynamics.Dynamic('p'))
-            p.insert(length * 2, dynamics.Dynamic('mp'))
             p.makeMeasures(inPlace=True)
             theScore.append(p)
 
     return theScore
 
-def standardizeLength(part, length):
+def getTrades(chords, melody, length):
+    solo, lengths = getSolo(chords, melody, length, "piano", True)
+    pianoTrades = []
+    hornTrades = []
+    curOffset = 0
+    curLengthIdx = 0
+    curLength = lengths[0]
+    for n in solo:
+        if curOffset >= curLength:
+            curLengthIdx += 1
+            curLength += lengths[curLengthIdx]
+        if curLengthIdx % 2 == 0:
+            pianoTrades.append(n)
+            hornTrades.append(note.Rest(quarterLength=n.quarterLength))
+        else: 
+            hornTrades.append(n)
+            pianoTrades.append(note.Rest(quarterLength=n.quarterLength))
+        curOffset += n.quarterLength
+    return pianoTrades, hornTrades
+
+def fillUpToLength(part, length):
     while part.quarterLength < length:
         part.append(note.Rest())
+    if part.quarterLength > length:
+        part[-1].quarterLength -= part.quarterLength - length
 
 def swingify(instream, inst):
     """
@@ -306,6 +173,7 @@ def swingify(instream, inst):
                 prevElem.offset = elem.offset - 0.5
                 if not isinstance(prevElem, note.Rest):
                     prevElem.tie = tie.Tie('stop')
+                newPart.insert(prevElem.offset, prevElem)
             else:
                 prevElem.duration.appendTuplet(duration.Tuplet(3, 2))
                 prevElem.offset = elem.offset - 0.5
@@ -329,7 +197,7 @@ def swingify(instream, inst):
         prevElem = elem
     return newPart
 
-def getHornPart(chords, melody, length, t, swung, midi):
+def getHornPart(chords, melody, length, t, swung, midi, hornTrades):
     hornPart = stream.Part()
     hornPart.append(instrument.AltoSaxophone())
     hornPart.append(clef.TrebleClef())
@@ -341,16 +209,16 @@ def getHornPart(chords, melody, length, t, swung, midi):
     for n in melody:
         hornPart.insert(n["offset"], n["el"])
 
-    #Two solos
-    for _ in range(int(length * 2)):
-        hornPart.append(note.Rest())
-
-    #Add any left over beats (happens if time signature of original is not 4/4)
-    if (length * 2) % 1 != 0:
-        hornPart.append(note.Rest(quarterlength=((length * 2) % 1)))
+    #Piano solo
+    fillUpToLength(hornPart, length * 2)
 
     #Horn solo
-    hornPart.append(transposeSolo(getSolo(chords, melody, length, "horn"), "horn"))
+    solo, _ = getSolo(chords, melody, length, "horn")
+    hornPart.append(solo)
+
+    #Trading fours
+    for n in hornTrades:
+        hornPart.append(n)
 
     #Head
     for n in melody:
@@ -363,6 +231,8 @@ def getHornPart(chords, melody, length, t, swung, midi):
     hornPart.makeMeasures(inPlace=True)
     hornPart.makeTies(inPlace=True)
     newPart = hornPart if not swung else swingify(hornPart, instrument.AltoSaxophone())
+    # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
+    # exit()
     return newPart
 
 def getBassPart(chords, melody, length, t, swung):
@@ -373,16 +243,9 @@ def getBassPart(chords, melody, length, t, swung):
     if t is not None:
         bassPart.append(t)
 
-    #Head
-    bassPart.append(getBassPattern(chords, length))
-
-    #Bass solo
-    bassPart.append(transposeSolo(getSolo(chords, melody, length, "bass"), "bass"))
-
-    # Piano Solo, Horn solo, Head
-    for _ in range(3):
+    for _ in range(5):
         for n in getBassPattern(chords, length):
-            bassPart.append(copy.deepcopy(n))
+            bassPart.append(n)
 
     bassPart.makeMeasures(inPlace=True)
     bassPart.makeTies(inPlace=True)
@@ -445,6 +308,58 @@ def getBassPattern(chords, length):
 
     return bassPattern
 
+def makeMarkovChain(chord, scale):
+    """
+    Creates a Markov chain for the given chord and scale. 
+
+    Returns a dictionary where the keys are previous notes and the values are dictionaries 
+    of next notes with their probabilities.
+    """
+    mc = {}
+    for prev in scale:
+        row = {}
+        buckets = [0] * len(scale) 
+        for i, choice in enumerate(scale): 
+            buckets[i] += 1 # each note has a chance of being selected
+            if choice in chord and prev not in chord: # notes in the chord have a higher chance of being selected
+                buckets[i] += 1
+            if choice not in chord and prev in chord:
+                buckets[i] += 1
+            if choice == prev:
+                if i != 0:
+                    buckets[(i - 1)] += 1 # the note before it has additional chance of being selected
+                buckets[i] == 0
+                if i != len(scale) - 1:
+                    buckets[(i + 1)] += 1 # the note after it has additional chance of being selected
+        buckets[scale.index(prev)] == 0
+        bucketrates = [0.95 * i / sum(buckets) for i in buckets]
+        
+        for i, choice in enumerate(scale):
+            if prev == choice: 
+                row[choice] = 0.05 # Low chance of repeated note
+            else:
+                row[choice] = bucketrates[i]
+        mc[prev] = row
+    return mc
+
+MARKOVS = {k: makeMarkovChain(NOTES_FOR_CHORDS[k], SCALES_FOR_CHORDS[k]) for k in SCALES_FOR_CHORDS.keys()}
+
+def chordSymbolToQuality(s):
+    """
+    Converts a chord symbol to its quality, removing its root and inversion.
+
+    Returns the chord quality as a string.
+    """
+    match = re.search(r'[^A-Z]', s)
+    if match:
+        q = s[match.start():]
+        if q[0] == '-' or q[0] == '#':
+            q = q[1:]
+        if '/' in q:
+            q = q.split('/')[0]
+        return q
+    return ''
+
 def getPianoPart(chords, length, t, swung):
     pianoPart = stream.Part()
     pianoPart.append(instrument.Piano())
@@ -452,19 +367,9 @@ def getPianoPart(chords, length, t, swung):
     if t is not None:
         pianoPart.append(t)
 
-    #Head
-    pianoPart.append(getPianoPattern(chords, length))
-
-    #Bass solo
-    pianoPart.append(getPianoPattern(chords, length))
-
-    #Piano solo
-    pianoPart.append(getPianoPattern(chords, length))
-
-    #Horn solo, Head
-    for _ in range(2):
+    for _ in range(5):
         for n in getPianoPattern(chords, length):
-            pianoPart.append(copy.deepcopy(n))
+            pianoPart.append(n)
 
     pianoPart.makeMeasures(inPlace=True)
     pianoPart.makeTies(inPlace=True)
@@ -539,13 +444,6 @@ def getRhythms(length):
     # print(length, sum(rhythms), rhythms)
     return rhythms
 
-LENGTH_OPTIONS = [0.5, 1, 1.5, 2, 2.5] # TODO add more options for length of notes
-SHORT_LENGTH_WEIGHTS = [0.3, 0.25, 0.2, 0.15, 0.1] # TODO add more options for length of notes
-LONG_LENGTH_WEIGHTS = [0.1, 0.2, 0.25, 0.25, 0.2]# TODO add more options for length of notes
-MONTE_SHORT_LENGTH_REST_PROBABILITY = 0.4 # probability of adding a rest, higher for accomp
-MONTE_LONG_LENGTH_REST_PROBABILITY = 0.2 # probability of adding a rest, higher for accomp
-
-## from comp2.py
 def mapRhythms(notes, root, rhythms, startingOffset): # notes will actually be note objects
     # comp = stream.Part()
     comp = []
@@ -570,7 +468,7 @@ def mapRhythms(notes, root, rhythms, startingOffset): # notes will actually be n
                 for n in notesInChord:
                     noteIntervalFromRoot = abs((n.pitch.midi - root) % 12)
                     if noteIntervalFromRoot == 0: # roots
-                        prob = 0.25
+                        prob = 0.15
                     elif noteIntervalFromRoot == 3 or noteIntervalFromRoot == 4:
                         prob = 0.9
                     elif noteIntervalFromRoot == 7:
@@ -578,7 +476,7 @@ def mapRhythms(notes, root, rhythms, startingOffset): # notes will actually be n
                     elif noteIntervalFromRoot == 10 or noteIntervalFromRoot == 11:
                         prob = 0.9
                     else:
-                        prob = 0.6
+                        prob = 0.5
                     stat = random.random()
                     # print(stat, prob)
                     if stat < prob and n not in chordNotes:
@@ -608,29 +506,29 @@ def mapRhythms(notes, root, rhythms, startingOffset): # notes will actually be n
         currentOffset %= 4
     return comp
 
-def getPianoSoloPart(chords, melody, length, t, swung):
+def getPianoSoloPart(chords, melody, length, t, swung, pianoTrades):
     pianoPart = stream.Part()
     pianoPart.append(instrument.Piano())
 
     if t is not None:
         pianoPart.append(t)
 
-    #Head, Bass solo
-    for _ in range(int(length * 2)):
-        pianoPart.append(note.Rest())
-
-    if (length * 2) % 1 != 0:
-        pianoPart.append(note.Rest(quarterlength=((length * 2) % 1)))
+    #Head
+    fillUpToLength(pianoPart, length)
 
     #Piano solo
-    pianoPart.append(transposeSolo(getSolo(chords, melody, length, "piano"), "piano"))
+    solo, _ = getSolo(chords, melody, length, "piano")
+    pianoPart.append(solo)
 
-    #Horn solo, Head
-    for _ in range(int(length * 2)):
-        pianoPart.append(note.Rest())
+    #Horn solo
+    fillUpToLength(pianoPart, length * 3)
 
-    if (length * 2) % 1 != 0:
-        pianoPart.append(note.Rest(quarterlength=((length * 2) % 1)))
+    #Trading fours
+    for n in pianoTrades:
+        pianoPart.append(n)
+
+    #Head
+    fillUpToLength(pianoPart, length * 5)
 
     pianoPart.makeMeasures(inPlace=True)
     pianoPart.makeTies(inPlace=True)
