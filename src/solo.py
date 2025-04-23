@@ -372,7 +372,7 @@ def getSolo(chords, melody, length, instrument, trades=False):
                     n.transpose("-P15", inPlace=True)
     offset = 0
     for i in range(numSoloSplits):
-        print(f"Generating split {i + 1}/{numSoloSplits} for {instrument if not trades else 'traded fours'} solo... [{'█' * (i + 1) + ' ' * (numSoloSplits - i - 1)}]", end='\r')
+        print(f"Generating split {i + 1}/{numSoloSplits} for {instrument if not trades else 'traded fours'} solo... [{'#' * (i + 1) + ' ' * (numSoloSplits - i - 1)}]", end='\r')
         split = generateSplit(i)
         melodies.append(split)
         if trades and i < numSoloSplits - 1:
