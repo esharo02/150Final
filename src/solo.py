@@ -277,11 +277,8 @@ def getSolo(chords, melody, length, instrument, trades=False):
         elif instrument == "piano" or instrument == "horn":
             expectedattacks = 0.75 * len(chromosome) # one attack every 3/4 of a beat on average
         score -= abs(expectedattacks - attacks) * 1.6
-        # print(score)
         score /= 100
         x = (math.tanh(score) + 1) / 2
-        
-        # return -4000/441 * x**3 + 4700/441 * x**2 - 100/63 * x
         return x
     
 
@@ -419,21 +416,3 @@ def getSolo(chords, melody, length, instrument, trades=False):
     transposeSolo(solo)
     print() # so we can see next progress bar
     return solo, [len(split) / 2 for split in melodysplits]
-
-from ingestlead import get_chords
-if __name__ == "__main__": # testing main
-    chords, melody, length, t, i44 = get_chords("../leads/AllOfMe.musicxml")
-    # print(melody)
-    s = getSolo(chords, melody, length, "horn")
-    st = stream.Stream()
-    for n in s:
-        st.append(n)
-    sc = stream.Score()
-    sc.append(st)
-    for ch in chords:
-        if isinstance(ch['el'], harmony.ChordSymbol):
-            st.insert(ch['offset'], ch['el'])
-    sc.makeMeasures()
-    st.show()
-
-    pass

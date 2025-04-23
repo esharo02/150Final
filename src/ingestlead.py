@@ -20,7 +20,7 @@ def get_chords(mxl_file):
         if isinstance(element, bar.Repeat):
             repeatBars.append({"el": element, "offset": element.offset})
 
-    #Repeat brackets (ones with 1st and 2ns endings)
+    #Repeat brackets (ones with 1st and 2nd endings)
     rbs = []
     for el in s.flatten():
         if isinstance(el, spanner.RepeatBracket):
@@ -104,9 +104,7 @@ def get_chords(mxl_file):
     chords.sort(key=lambda x: x["offset"])
     melody.sort(key=lambda x: x["offset"])
 
-    for c in chords:
-        if isinstance(c['el'], harmony.NoChord):
-            chords.remove(c)
+    chords = [c for c in chords if not isinstance(c["el"], harmony.NoChord)]
 
     #Combine notes at the same offset
     temp = {}

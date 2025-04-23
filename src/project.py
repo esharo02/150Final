@@ -7,6 +7,8 @@ import random
 from fractions import Fraction
 from solo import *
 from constants import *
+import pickle
+import os
 
 def main():
 
@@ -15,18 +17,26 @@ def main():
     argparser.add_argument("--swing", action='store_true', help="Whether to swing the file or not")
     argparser.add_argument('-m', dest='mode', action='store_const', const='-m', help='Midi output')
     argparser.add_argument('-s', dest='mode', action='store_const', const='-s', help='Sheet music output. Default.')
+    argparser.add_argument('--repickle', action='store_true', help="Whether to repickle the Scores or not.")
 
     args = argparser.parse_args()
     midi = args.mode == "-m"
     FILE = args.file
 
-    chords, melody, length, t, isFourFour = get_chords(FILE)
-    if len(chords) == 0:
-        print("Error: No chords found in the file.")
-        return
+    if args.repickle or not os.path.exists(FILE + '.pkl'):
+        chords, melody, length, t, isFourFour = get_chords(FILE)
+        if len(chords) == 0:
+            print("Error: No chords found in the file.")
+            return
 
+        theScore = buildScore(chords, melody, length, t.getQuarterBPM(), args.swing, midi, isFourFour)
+        with open(FILE + '.pkl', 'wb') as file:
+            pickle.dump(theScore, file)
 
-    theScore = buildScore(chords, melody, length, t.getQuarterBPM(), args.swing, midi, isFourFour)
+    else:
+        with open(FILE + '.pkl', 'rb') as file:
+            theScore = pickle.load(file)
+
     if midi:
         theScore.show('midi')
     else:
@@ -246,8 +256,6 @@ def getHornPart(chords, melody, length, t, swung, midi, hornTrades):
     hornPart.makeMeasures(inPlace=True)
     hornPart.makeTies(inPlace=True)
     newPart = hornPart if not swung else swingify(hornPart, instrument.AltoSaxophone())
-    # newPart.show('text', addEndTimes=True, addStartTimes=True, addOffsets=True, addDurations=True, addClefs=True, addInstruments=True)
-    # exit()
     return newPart
 
 def getBassPart(chords, melody, length, t, swung):
