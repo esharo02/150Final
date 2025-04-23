@@ -20,6 +20,21 @@ options:
   -m          Midi output
   -s          Sheet music output. Default.
 
+Pickling is output option-specific. Do not try to run a MIDI pickle with the 
+sheet music option or vice versa. All of the submitted pickles were made with
+the sheet music option. 
+
+To run in MIDI mode while there exists a sheet music pickle, run with -m and
+--repickle. To run in sheet music mode while there exists a MIDI pickle, run 
+with -s and --repickle.
+
+Most of the sheets are supposed to be swung. For best output, include —swing 
+for every lead sheet except:
+
+- Girl From Ipanema
+- Sanma Samba
+- Sir Duke
+
 3. A paragraph giving a high-level summary of your overall compositional approach.
 
 This program will produce midi/sheet music for a selection of jazz pieces, 
