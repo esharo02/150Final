@@ -215,6 +215,11 @@ def swingify(instream, inst):
         else:
             newPart.insert(elem.offset, elem)
         prevElem = elem
+    prevStartTie = False
+    for n in newPart.notesAndRests:
+        if prevStartTie and n.tie and n.tie.type == "start":
+            n.tie = tie.Tie("continue")
+        prevStartTie = n.tie and n.tie.type == "start"
     return newPart
 
 def getHornPart(chords, melody, length, t, swung, midi, hornTrades):

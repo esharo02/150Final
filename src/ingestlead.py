@@ -84,11 +84,13 @@ def get_chords(mxl_file):
                 curStart += repeatBars[i]['offset']
             prevWasEndingRepeat = False
 
-        for element in repeatSection.flatten():
+        for i, element in enumerate(repeatSection.flatten()):
             if isinstance(element, harmony.ChordSymbol):
                 repeatChords.append({"el": element, "offset": element.offset + curStart})
             elif isinstance(element, note.Note) or isinstance(element, note.Rest) or isinstance(element, chord.Chord):
                 repeatMelody.append({"el": element, "offset": element.offset + curStart})
+                if i == len(repeatSection.flatten()) - 1 and element.tie and element.tie.type == "start":
+                    element.addLyric("unfinished")
     
         for ch in chords:
             if ch["offset"] >= curStart:
@@ -104,7 +106,14 @@ def get_chords(mxl_file):
     chords.sort(key=lambda x: x["offset"])
     melody.sort(key=lambda x: x["offset"])
 
-    chords = [c for c in chords if not isinstance(c["el"], harmony.NoChord)]
+    next = False
+    for n in melody:
+        if next:
+            n['el'].tie = tie.Tie(type="stop")
+            break
+        if n['el'].lyric == "unfinished":
+            next = True
+            n['el'].lyric == None
 
     #Combine notes at the same offset
     temp = {}
