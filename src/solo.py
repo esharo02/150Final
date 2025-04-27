@@ -253,9 +253,9 @@ def getSolo(chords, melody, length, instrument, trades=False):
                     if instrument != "piano":
                         score -= 3 
                     else:
-                        score -= 1 # Less bad for piano
+                        score -= 2 # Less bad for piano
                 if i > 0 and abs((gene) - (chromosome[i - 1])) > 7:
-                    score -= 10
+                    score -= 12
                     if instrument == "horn":
                         score -= 5 # this is even worse on sax
                 # if i > 0 and 1 <= abs((gene) - (chromosome[i - 1])) < 3:
